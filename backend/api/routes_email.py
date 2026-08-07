@@ -199,14 +199,6 @@ def _build_html(request: EmailReportRequest) -> str:
     .verdict-dot-go      {{ width:10px;height:10px;border-radius:50%;background:#10b981;flex-shrink:0; }}
     .verdict-dot-consider{{ width:10px;height:10px;border-radius:50%;background:#f59e0b;flex-shrink:0; }}
 
-    /* Cashback */
-    .cashback-box {{
-      background: #f0fdf4; border: 1.5px solid #86efac;
-      border-radius: 8px; padding: 12px 18px;
-      font-size: 12px; color: #166534; font-weight: 600;
-      margin: 20px 0; display: flex; align-items: center; gap: 10px;
-    }}
-
     /* Disclaimer */
     .disclaimer {{
       background: #f8fafc; border: 1px solid #e2eaf4;
@@ -288,11 +280,6 @@ def _build_html(request: EmailReportRequest) -> str:
       <div class="icp-item-label">Deal Size</div>
       <div class="icp-item-value">{deal_label}</div>
     </div>
-  </div>
-
-  <!-- Cashback guarantee -->
-  <div class="cashback-box">
-    🛡 LeadStrategus Cashback Guarantee - If we don't deliver the promised meetings at any event below, you receive a full cashback. No questions asked.
   </div>
 
   <!-- GO Events -->
