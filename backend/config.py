@@ -25,6 +25,14 @@ class Settings(BaseSettings):
     openai_search_model: str = "gpt-4o"
     openai_timeout_seconds: int = 180
 
+    # ── Storage (optional — Neon Postgres). Unset = nothing stored. ─
+    database_url: str = ""
+
+    # ── Upstash Redis (optional). Unset = no cache, no rate limit. ──
+    redis_url: str = ""
+    search_cache_ttl_seconds: int = 86400   # identical ICP → reuse result 24h
+    search_daily_limit: int = 10            # searches per device/IP per UTC day (0 = off)
+
     # ── Email report (Resend) ─────────────────────────────────────
     resend_api_key: str = ""
     resend_from_email: str = "kirubakaran.p@leadstrategus.com"

@@ -30,6 +30,18 @@ services:
       - key: OPENAI_SEARCH_MODEL
         value: gpt-4o
 
+      # ── Lead capture (optional — Neon Postgres connection string) ──
+      - key: DATABASE_URL
+        sync: false   # ← set in Render dashboard (keep secret); unset = nothing stored
+
+      # ── Upstash Redis (optional — cache + daily rate limit) ───────
+      - key: REDIS_URL
+        sync: false   # ← rediss://default:<pass>@<host>.upstash.io:6379
+      - key: SEARCH_DAILY_LIMIT
+        value: "10"
+      - key: SEARCH_CACHE_TTL_SECONDS
+        value: "86400"
+
       # ── Email (Resend) ────────────────────────────────────────────
       - key: RESEND_API_KEY
         sync: false
