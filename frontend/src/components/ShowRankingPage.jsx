@@ -16,6 +16,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import EventTable from './EventTable'
+import { isFreeEmailDomain } from '../lib/workEmail'
 import MeetingPotentialCard from './MeetingPotentialCard'
 import '../ranking.css'
 
@@ -211,6 +212,7 @@ export default function ShowRankingPage({
   const handleUnlock = () => {
     if (!gateEmail.trim()) { setGateError('Enter your work email to unlock'); return }
     if (!gateEmail.includes('@')) { setGateError('Enter a valid email'); return }
+    if (isFreeEmailDomain(gateEmail)) { setGateError('Please use your company work email, not a personal address (e.g. Gmail, Yahoo)'); return }
     setUnlocked(true)
     setGateError('')
     onEmailUnlock && onEmailUnlock(gateEmail)

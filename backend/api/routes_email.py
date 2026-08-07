@@ -17,12 +17,10 @@ import io
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, EmailStr
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import get_settings
-from db.database import get_db
 from loguru import logger
 
 router   = APIRouter()
@@ -201,14 +199,6 @@ def _build_html(request: EmailReportRequest) -> str:
     .verdict-dot-go      {{ width:10px;height:10px;border-radius:50%;background:#10b981;flex-shrink:0; }}
     .verdict-dot-consider{{ width:10px;height:10px;border-radius:50%;background:#f59e0b;flex-shrink:0; }}
 
-    /* Cashback */
-    .cashback-box {{
-      background: #f0fdf4; border: 1.5px solid #86efac;
-      border-radius: 8px; padding: 12px 18px;
-      font-size: 12px; color: #166534; font-weight: 600;
-      margin: 20px 0; display: flex; align-items: center; gap: 10px;
-    }}
-
     /* Disclaimer */
     .disclaimer {{
       background: #f8fafc; border: 1px solid #e2eaf4;
@@ -290,11 +280,6 @@ def _build_html(request: EmailReportRequest) -> str:
       <div class="icp-item-label">Deal Size</div>
       <div class="icp-item-value">{deal_label}</div>
     </div>
-  </div>
-
-  <!-- Cashback guarantee -->
-  <div class="cashback-box">
-    🛡 LeadStrategus Cashback Guarantee - If we don't deliver the promised meetings at any event below, you receive a full cashback. No questions asked.
   </div>
 
   <!-- GO Events -->
@@ -441,13 +426,17 @@ and pipeline projections based on your ICP.</p>
 # ── FastAPI route ──────────────────────────────────────────
 
 @router.post("/email-report")
-async def email_report(request: EmailReportRequest, http_request: Request, db: AsyncSession = Depends(get_db)):
+async def email_report(request: EmailReportRequest, http_request: Request):
     """
     Generate a PDF report in memory and email it via Resend.
     The PDF is never written to disk, S3, R2, or any storage.
     """
     if not request.email or "@" not in request.email:
         raise HTTPException(status_code=422, detail="Invalid email address.")
+
+    from work_email import is_valid_work_email, WORK_EMAIL_ERROR
+    if not is_valid_work_email(request.email):
+        raise HTTPException(status_code=422, detail=WORK_EMAIL_ERROR)
 
     if not request.events:
         raise HTTPException(status_code=400, detail="No events provided for the report.")
@@ -472,15 +461,17 @@ async def email_report(request: EmailReportRequest, http_request: Request, db: A
         # 4. pdf_bytes goes out of scope here - no storage, no disk write
         del pdf_bytes
 
+        # Record the request (no-op when DATABASE_URL is unset)
         try:
-            from db import analytics_crud as _ac
-            session_id = http_request.headers.get("x-session-id", "")
-            await _ac.log_event(
-                db, session_id, "email_report_requested",
-                metadata={"email": request.email, "event_count": len(request.events)},
+            import db as _db
+            fwd = http_request.headers.get("x-forwarded-for", "")
+            ip = fwd.split(",")[0].strip() if fwd else (http_request.client.host if http_request.client else "")
+            await _db.log_email_report(
+                request.email, len(request.events), company_name,
+                http_request.headers.get("x-session-id", ""), ip, True,
             )
         except Exception as _e:
-            logger.debug(f"analytics email-report log skipped: {_e}")
+            logger.debug(f"email-report log skipped: {_e}")
 
         return {
             "success": True,

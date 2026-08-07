@@ -363,7 +363,9 @@ export default function ICPForm({
   // is the "Global event agent icp form" widget in the Cloudflare
   // dashboard; the matching secret lives server-side only, as
   // TURNSTILE_SECRET (see backend/api/bot_protection.py).
-  const TURNSTILE_SITE_KEY = '0x4AAAAAAEFPmIRRrqFyz0Pf'
+  // Disabled for now — restore the sitekey ('0x4AAAAAAEFPmIRRrqFyz0Pf')
+  // to re-enable the Turnstile widget; everything below is gated on it.
+  const TURNSTILE_SITE_KEY = ''
 
   // Fires once per mount, on the first field the user actually touches -
   // "form_start" needs to fire on genuine engagement, not on render (the

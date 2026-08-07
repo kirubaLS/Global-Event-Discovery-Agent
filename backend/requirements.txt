@@ -2,66 +2,29 @@
 fastapi
 uvicorn[standard]==0.29.0
 starlette
-python-multipart
-
-# ── Database ─────────────────────────────────────────────────────────
-sqlalchemy
-# SQLite async driver (local development)
-aiosqlite
-# PostgreSQL async driver (production — Neon / Supabase / Render PG)
-asyncpg
 
 # ── Config / env ─────────────────────────────────────────────────────
 pydantic
 pydantic-settings
 python-dotenv
-# Pinned directly (not just relying on it as pydantic's transitive dep) -
-# models/icp_profile.py's TypedDict field needs typing_extensions.TypedDict
-# specifically; pydantic v2 rejects typing.TypedDict on Python < 3.12.
-typing_extensions
 
-# ── LLM ──────────────────────────────────────────────────────────────
+# ── ChatGPT real web search (the entire event pipeline) ──────────────
 openai
 
-# ── Shared cache / rate-limit state across worker processes (optional) ─
+# ── Lead capture / tracking (optional — needs DATABASE_URL, Neon Postgres)
+asyncpg
+
+# ── Upstash Redis cache + daily rate limit (optional — needs REDIS_URL)
 redis
 
-# ── Embeddings (disabled on free tier by default — uses >512 MB RAM) ─
-faiss-cpu
-sentence-transformers
-
-# ── Web scraping ─────────────────────────────────────────────────────
-httpx
-httpx[http2]
-beautifulsoup4
-playwright
-
-# ── PDF generation (HTML → PDF) ──────────────────────────────────────
+# ── PDF generation (HTML → PDF) for /api/email-report ────────────────
 # WeasyPrint requires system libs; see render.yaml buildCommand
 weasyprint
 # Pure-Python fallback — zero system deps, always works
 fpdf2
 
-# ── PDF reading ───────────────────────────────────────────────────────
-pypdf
-
 # ── Email delivery ────────────────────────────────────────────────────
 resend
 
-# ── Scheduling ────────────────────────────────────────────────────────
-apscheduler
-pytz
-
 # ── Utilities ────────────────────────────────────────────────────────
-pandas
-rapidfuzz
-tenacity
 loguru
-serpapi
-
-# pgvector semantic matching - local ONNX embeddings, no torch
-fastembed
-
-# test suite
-pytest
-pytest-asyncio

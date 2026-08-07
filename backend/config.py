@@ -1,222 +1,45 @@
-from pydantic_settings import BaseSettings
+"""
+backend/config.py — slim settings for the GPT-web-search backend.
+
+Only three concerns remain server-side:
+  1. /api/search        → OpenAI web search (gpt_search.py)
+  2. /api/email-report  → PDF report via Resend (api/routes_email.py)
+  3. maintenance switch → main.py middleware
+"""
 from functools import lru_cache
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    # ── App ──────────────────────────────────────
     app_name: str = "Event Intelligence Agent"
-    app_version: str = "1.0.0"
     debug: bool = False
     frontend_origin: str = "http://localhost:5173"
-    # Master kill switch: when true, every request except GET
-    # /api/maintenance-status and GET /health gets a 503 with a
-    # maintenance payload (see main.py's middleware), and the frontend
-    # shows a full-page "we'll be back soon" screen instead of the app —
-    # set/unset via the Render env var, no redeploy needed either way.
+
+    # Site-wide kill switch (frontend checks /api/maintenance-status)
     maintenance_mode: bool = False
     maintenance_message: str = ""
 
-    # ── Database ─────────────────────────────────
-    database_url: str = "sqlite+aiosqlite:///./events.db"
-
-    # ── Shared cache / rate-limit state (Redis) ───
-    # Optional. When empty, relevance/llm_client.py falls back to
-    # in-process memory automatically — fine for a single worker, but
-    # once you run multiple Uvicorn workers or instances (needed for
-    # 1k-concurrent-style load) the LLM response cache, the daily $
-    # budget counter, and the TPM throttle window all need to be SHARED
-    # across processes, or each worker enforces its own independent
-    # budget and the real spend cap becomes (budget × worker count).
-    # Set this (e.g. redis://localhost:6379/0, or a managed Redis URL)
-    # before scaling past one worker.
-    redis_url: str = ""
-    # Number of background workers consuming POST /api/search jobs from the
-    # Redis queue (see queueing/search_queue.py). Only relevant when
-    # redis_url is set — with no Redis, search runs inline per-request
-    # regardless of this value. Bound by openai_tpm_limit/db pool size
-    # more than raw worker count — more workers just means more jobs
-    # racing those same shared ceilings concurrently.
-    #
-    # Kept low (1) on purpose: each worker polls the queue every
-    # search_queue_poll_seconds REGARDLESS of whether there's a job
-    # waiting — that's N workers × 1 Redis command every poll interval,
-    # 24/7, forever. On a metered free tier (Upstash: 500k commands/mo)
-    # this adds up fast at idle — 3 workers @ 5s used to burn ~1.5M/mo
-    # on its own. This app's real traffic ceiling is tiny (one search
-    # per IP per day, see api/rate_limit.py), so raise this only if
-    # you've actually confirmed jobs are queuing up faster than 1
-    # worker clears them.
-    search_queue_workers: int = 1
-    # Seconds between each worker's queue poll when idle. See the comment
-    # above — this is the primary lever for Redis command budget, not
-    # worker count. 3 workers × poll every N seconds = ~3 × (86400×30/N)
-    # commands/month from idle polling alone.
-    search_queue_poll_seconds: int = 10
-
-    # ── OpenAI LLM ─────────────────────────────────
-    # Paid API — token cost is real money, so every knob here exists to
-    # cap spend, not just to configure behaviour. See llm_client.py for
-    # how tpm_limit / max_tokens / daily_usd_budget are enforced.
+    # ── OpenAI (ChatGPT with real web search) ─────────────────────
     openai_api_key: str = ""
-    # gpt-4o-mini is the cheapest model that reliably follows this app's
-    # JSON-mode ranking/tagging/parsing prompts — roughly 1/10th the
-    # price of a full-size model (~$0.15/1M input, ~$0.60/1M output).
-    openai_model: str = "gpt-4o-mini"
-    openai_temperature: float = 0.1
-    openai_max_tokens: int = 1024        # completion cap — output tokens cost ~4x input
-    openai_timeout_seconds: int = 45
+    # Must be a model that supports the Responses API `web_search` tool.
+    openai_search_model: str = "gpt-4o"
+    openai_timeout_seconds: int = 180
 
-    # Comma-separated fallback chain tried when the primary model errors
-    # or rate-limits. Keep every entry on the mini/nano tier — putting a
-    # full-size model here defeats the cost cap.
-    openai_fallback_models: str = "gpt-4o-mini,gpt-4.1-mini"
+    # ── Storage (optional — Neon Postgres). Unset = nothing stored. ─
+    database_url: str = ""
 
-    # Self-imposed tokens-per-minute ceiling. This is a spend throttle,
-    # not an OpenAI-enforced limit — it exists so a traffic spike queues
-    # briefly instead of firing an unbounded number of billed calls at
-    # once.
-    openai_tpm_limit: int = 40000
-    # Longest we'll queue a call waiting for TPM headroom before falling
-    # back to the next model / giving up. Keep short — under concurrent
-    # load a long wait here multiplies instead of adding once.
-    openai_tpm_max_wait_seconds: float = 10.0
+    # ── Upstash Redis (optional). Unset = no cache, no rate limit. ──
+    redis_url: str = ""
+    search_cache_ttl_seconds: int = 86400   # identical ICP → reuse result 24h
+    search_daily_limit: int = 10            # searches per device/IP per UTC day (0 = off)
 
-    # ── Hard cost ceiling ──────────────────────────
-    # Once estimated spend for the current UTC day crosses this, chat_json()
-    # refuses new calls (returns None) instead of silently keeping billing.
-    # Every call site already degrades gracefully on None (skip validation,
-    # fall back to rule-based scoring), so this fails safe.
-    openai_daily_usd_budget: float = 5.0
-
-    # ── Embedding model ───────────────────────────
-    embedding_model: str = "all-MiniLM-L6-v2"
-    embedding_dim: int = 384
-    enable_semantic_search: bool = False
-    preload_index_on_startup: bool = False
-
-    # ── pgvector semantic matching (Postgres/Neon only) ──
-    # OFF by default — must be explicitly enabled. On a Render free
-    # instance (512MB), loading the local ONNX embedding model
-    # (fastembed + onnxruntime, ~250-300MB resident) is enough on its
-    # own to exceed the memory limit and get the whole process killed
-    # mid-request. Only flip this on if the instance has headroom, or
-    # rely on the Jina API provider (network call, no local model).
-    pgvector_enabled: bool = False
-    pgvector_embed_batch: int = 64      # events embedded per search request (lazy backfill cap)
-    pgvector_top_k: int = 80            # semantic hits pulled per search
-    jina_api_key: str = ""
-    jina_embedding_model: str = "jina-embeddings-v3"
-    # fastembed loads a local ONNX model into process memory the first
-    # time it's used — never do this unless the instance has spare RAM.
-    # Even with pgvector_enabled=true, the Jina API provider (if
-    # JINA_API_KEY is set) is preferred and fastembed is skipped unless
-    # this is explicitly turned on too.
-    pgvector_allow_local_embeddings: bool = False
-
-    # ── Real-time Event APIs ──────────────────────
-    # All free tiers — see signup URLs in .env.example
-
-    # SerpAPI — PRIMARY real-time source
-    # engine=google_events gives live Google Events data
-    # Free: 100 searches/month  |  https://serpapi.com
-    # Multiple free-tier accounts can be chained: serpapi_key is tried
-    # first, and enrichment/serpapi_key_rotator.py switches to
-    # serpapi_key2 / serpapi_key3 once the active key's monthly credits
-    # run low. All three are optional beyond the first.
-    serpapi_key: str = ""
-    serpapi_key2: str = ""
-    serpapi_key3: str = ""
-
-    # Ticketmaster Discovery API
-    # Free: 5,000 calls/day     |  https://developer.ticketmaster.com
-    ticketmaster_key: str = ""
-
-    # Eventbrite API
-    # Free with account         |  https://www.eventbrite.com/platform/api
-    eventbrite_token: str = ""
-
-    # PredictHQ Event Intelligence
-    # Free: 1,000 events/month  |  https://www.predicthq.com/signup
-    predicthq_key: str = ""
-
-    # Luma (lu.ma) API
-    # Free with account         |  https://lu.ma/developers
-    luma_api_key: str = ""
-
-    # AllEvents.in API (optional)
-    allevents_key: str = ""
-
-    # ITA Trade Events API (data.trade.gov) — U.S. Commercial Service
-    # trade shows, missions & conferences for exporters. Free with a
-    # data.trade.gov account | https://developer.trade.gov/api-details#api=trade-events
-    ita_api_key: str = ""
-
-    # Master switch for the live real-time API fan-out (Ticketmaster,
-    # Eventbrite, ITA) in ingestion/realtime_pipeline.py. When False,
-    # fetch_realtime_candidates() skips the LLM query-building + API
-    # calls entirely and goes straight to its existing tiered DB-only
-    # query (industry+geo+persona -> industry+geo -> geo+date -> date
-    # window) — the same fallback path that already runs when those
-    # APIs return nothing, just used unconditionally instead of only as
-    # a last resort. True by default so existing deployments keep their
-    # current behavior; set to False to search only the local catalog.
-    enable_realtime_apis: bool = True
-
-    # ── Scraper tuning ────────────────────────────
-    scrape_delay_seconds: float = 2.0
-    scrape_timeout_seconds: int = 15
-
-    # ── Relevance tuning ─────────────────────────
-    # cosine (embedding) is the only near-universally-populated signal in
-    # this DB — industry_tags/audience_personas are empty on ~85-95% of
-    # rows, so the rule score's industry/persona components are unreliable
-    # on most events. Weighted toward cosine accordingly.
-    cosine_weight: float = 0.75
-    rule_weight: float = 0.25
-    go_threshold: float = 0.68
-    consider_threshold: float = 0.42
-
-    # ── Retrieval pipeline (candidate_retriever.py / llm_selector.py) ──
-    # SQL-keyword-match + embedding recall -> top-12 -> single LLM call
-    # selects the top 6, each with a reason and GO/CONSIDER verdict. The
-    # only search pipeline now (the earlier score_candidates/rank_with_groq
-    # rule+two-LLM-call flow was removed once this was verified in
-    # production) — score_candidates() itself still lives in scorer.py,
-    # used by the standalone /geo-hint preview endpoint.
-    keyword_match_weight: float = 0.5
-    semantic_match_weight: float = 0.5
-    candidate_pool_size: int = 12
-    selection_size: int = 6
-    region_widen_threshold: int = 12
-
-    # ── Scheduler ────────────────────────────────
-    refresh_interval_hours: int = 24
-
-    # ── Email / Resend ────────────────────────────
+    # ── Email report (Resend) ─────────────────────────────────────
     resend_api_key: str = ""
     resend_from_email: str = "kirubakaran.p@leadstrategus.com"
 
-    # ── Fit scorer tuning (configurable via .env / Render env vars) ──
-    # Fraction of B2B show attendees who are decision-makers (not vendors/booth staff)
-    dm_ratio:             float = 0.35
-    # ±% confidence interval around ICP estimate (shown as range in UI)
-    icp_uncertainty:      float = 0.30
-    # Round ICP estimate to nearest N for honest uncertainty display
-    icp_round_to:         int   = 10
-    # Minimum show scale per deal tier (for deal-size fit scoring)
-    deal_min_strategic:   int   = 5000   # $500K+ deals need flagship events
-    deal_min_enterprise:  int   = 1000   # $100K+ deals need significant events
-    deal_min_high:        int   = 500    # $50K+ deals need mid-size events
-
-    # ── Seed protection ───────────────────────────
-    seed_admin_token: str = ""
-
-    # ── Analytics dashboard API (external app reads via this token) ──
-    analytics_api_token: str = ""
-
     class Config:
         env_file = ".env"
-        env_file_encoding = "utf-8"
+        extra = "ignore"
 
 
 @lru_cache()
