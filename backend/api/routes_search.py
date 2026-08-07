@@ -119,20 +119,39 @@ async def city_hint():
     return {"exact_match": True, "suggestions": []}
 
 
-# ── Analytics / consent no-ops (calls are fire-and-forget) ──────────
+# ── Analytics: stored in Postgres (fire-and-forget on the client) ───
 
 @router.post("/analytics/session/start")
-async def analytics_session_start(_: dict = None):
+async def analytics_session_start(body: dict, request: Request):
+    await db.upsert_session(
+        (body or {}).get("session_id") or request.headers.get("x-session-id", ""),
+        (body or {}).get("referrer") or "",
+        (body or {}).get("landing_page") or "",
+        _client_ip(request),
+        request.headers.get("user-agent", ""),
+    )
     return {"ok": True}
 
 
 @router.post("/analytics/session/heartbeat")
-async def analytics_heartbeat(_: dict = None):
+async def analytics_heartbeat(body: dict, request: Request):
+    await db.session_heartbeat(
+        (body or {}).get("session_id") or request.headers.get("x-session-id", ""),
+        (body or {}).get("delta_seconds") or 0,
+    )
     return {"ok": True}
 
 
 @router.post("/analytics/event")
-async def analytics_event(_: dict = None):
+async def analytics_event(body: dict, request: Request):
+    await db.log_activity(
+        (body or {}).get("session_id") or request.headers.get("x-session-id", ""),
+        (body or {}).get("event_type") or "",
+        (body or {}).get("submission_id") or "",
+        (body or {}).get("event_id") or "",
+        (body or {}).get("metadata") or {},
+        _client_ip(request),
+    )
     return {"ok": True}
 
 

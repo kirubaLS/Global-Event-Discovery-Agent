@@ -457,6 +457,18 @@ async def email_report(request: EmailReportRequest, http_request: Request):
         # 4. pdf_bytes goes out of scope here - no storage, no disk write
         del pdf_bytes
 
+        # Record the request (no-op when DATABASE_URL is unset)
+        try:
+            import db as _db
+            fwd = http_request.headers.get("x-forwarded-for", "")
+            ip = fwd.split(",")[0].strip() if fwd else (http_request.client.host if http_request.client else "")
+            await _db.log_email_report(
+                request.email, len(request.events), company_name,
+                http_request.headers.get("x-session-id", ""), ip, True,
+            )
+        except Exception as _e:
+            logger.debug(f"email-report log skipped: {_e}")
+
         return {
             "success": True,
             "message": f"Report sent to {request.email}. Check your inbox.",
