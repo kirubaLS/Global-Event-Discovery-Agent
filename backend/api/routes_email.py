@@ -17,12 +17,10 @@ import io
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, EmailStr
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import get_settings
-from db.database import get_db
 from loguru import logger
 
 router   = APIRouter()
@@ -441,7 +439,7 @@ and pipeline projections based on your ICP.</p>
 # ── FastAPI route ──────────────────────────────────────────
 
 @router.post("/email-report")
-async def email_report(request: EmailReportRequest, http_request: Request, db: AsyncSession = Depends(get_db)):
+async def email_report(request: EmailReportRequest, http_request: Request):
     """
     Generate a PDF report in memory and email it via Resend.
     The PDF is never written to disk, S3, R2, or any storage.
@@ -471,16 +469,6 @@ async def email_report(request: EmailReportRequest, http_request: Request, db: A
 
         # 4. pdf_bytes goes out of scope here - no storage, no disk write
         del pdf_bytes
-
-        try:
-            from db import analytics_crud as _ac
-            session_id = http_request.headers.get("x-session-id", "")
-            await _ac.log_event(
-                db, session_id, "email_report_requested",
-                metadata={"email": request.email, "event_count": len(request.events)},
-            )
-        except Exception as _e:
-            logger.debug(f"analytics email-report log skipped: {_e}")
 
         return {
             "success": True,

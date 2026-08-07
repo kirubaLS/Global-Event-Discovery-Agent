@@ -1,29 +1,9 @@
 # ─────────────────────────────────────────────────────────────────────
-# RENDER.YAML — Event Intelligence Agent
-# ─────────────────────────────────────────────────────────────────────
+# RENDER.YAML — Event Intelligence Agent (slim)
 #
-# ⚠️  IMPORTANT — PERSISTENT STORAGE ON FREE TIER
-# ─────────────────────────────────────────────────
-# Render free web services have NO persistent disk.
-# The `disk:` block requires a paid plan ($7/mo Starter).
-# SQLite on the ephemeral filesystem is wiped on every restart/spin-down.
-#
-# ✅  FREE SOLUTION: Neon PostgreSQL (https://neon.tech)
-#     • Free forever, 0.5 GB, no 90-day expiry
-#     • Takes ~2 minutes to set up
-#
-# SETUP STEPS:
-#   1. Go to https://neon.tech and create a free account
-#   2. Create a new project (one click, choose any region)
-#   3. On the Dashboard, copy the "Connection string":
-#        postgresql://user:pass@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
-#   4. In Render → your backend service → Environment → Add env var:
-#        DATABASE_URL = <paste the Neon connection string here>
-#   5. Click "Save Changes" → service redeploys automatically
-#   6. Done. All scraped events now persist across restarts and spin-downs.
-#
-# The app auto-detects the driver (asyncpg for Postgres, aiosqlite for SQLite)
-# and normalises the URL — no code changes needed.
+# No database, no scrapers, no queue. The backend is two endpoints:
+#   POST /api/search        → ChatGPT real web search (needs OPENAI_API_KEY)
+#   POST /api/email-report  → PDF via Resend (needs RESEND_API_KEY)
 # ─────────────────────────────────────────────────────────────────────
 
 services:
@@ -44,27 +24,11 @@ services:
       pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
-      # ── Database ─────────────────────────────────────────────────
-      # Set this to your Neon / Supabase PostgreSQL connection string.
-      # Example: postgresql://user:pass@ep-xxx.us-east-2.aws.neon.tech/neondb?sslmode=require
-      # The code auto-converts postgres:// → postgresql+asyncpg:// and sslmode → ssl.
-      # Leave as SQLite only for local testing (data won't persist on Render free tier).
-      - key: DATABASE_URL
+      # ── ChatGPT real web search ───────────────────────────────────
+      - key: OPENAI_API_KEY
         sync: false   # ← set in Render dashboard, not here (keep secret)
-
-      # ── LLM ──────────────────────────────────────────────────────
-      - key: GROQ_API_KEY
-        sync: false
-      - key: GROQ_MODEL
-        value: openai/gpt-oss-120b
-
-      # ── Event APIs ────────────────────────────────────────────────
-      - key: TICKETMASTER_KEY
-        sync: false
-      - key: EVENTBRITE_TOKEN
-        sync: false
-      - key: LUMA_API_KEY
-        sync: false
+      - key: OPENAI_SEARCH_MODEL
+        value: gpt-4o
 
       # ── Email (Resend) ────────────────────────────────────────────
       - key: RESEND_API_KEY
@@ -74,39 +38,6 @@ services:
 
       # ── Frontend / CORS ───────────────────────────────────────────
       - key: FRONTEND_ORIGIN
-        sync: false
-
-      # ── Embedding ──────────────────────────────────────────────────
-      # ENABLE_SEMANTIC_SEARCH controls the LEGACY in-process FAISS path
-      # only (sentence-transformers, loads a local model — too much RAM
-      # for the free tier). Semantic search here runs on pgvector
-      # instead: no local model, embeddings come from the Jina API and
-      # live in the events.embedding column on Neon.
-      - key: ENABLE_SEMANTIC_SEARCH
-        value: "false"
-      - key: PRELOAD_INDEX_ON_STARTUP
-        value: "false"
-      - key: PGVECTOR_ENABLED
-        value: "true"
-      - key: JINA_API_KEY
-        sync: false   # ← set in Render dashboard, not here (keep secret)
-
-      # ── Scoring (hybrid: semantic + rules, matches scorer.py defaults) ─
-      - key: COSINE_WEIGHT
-        value: "0.65"
-      - key: RULE_WEIGHT
-        value: "0.35"
-
-      # ── Scraper tuning ────────────────────────────────────────────
-      - key: SCRAPE_DELAY_SECONDS
-        value: "2.5"
-      - key: SCRAPE_TIMEOUT_SECONDS
-        value: "15"
-      - key: TOP_K_FOR_LLM
-        value: "10"
-
-      # ── Seed protection ───────────────────────────────────────────
-      - key: SEED_ADMIN_TOKEN
         sync: false
 
   - type: web
@@ -157,36 +88,3 @@ services:
       - type: rewrite
         source: /*
         destination: /index.html
-
-# ─────────────────────────────────────────────────────────────────────
-# NOTE ON DISK — DO NOT ADD BACK FOR FREE TIER
-# ─────────────────────────────────────────────────────────────────────
-# The `disk:` block is intentionally removed.
-# On free tier it either isn't attached or costs extra.
-# Use Neon PostgreSQL (free) as described above — it's the right tool.
-#
-# If you upgrade to Render Starter ($7/mo), you can add back:
-#   disk:
-#     name: events-db
-#     mountPath: /opt/render/project/src/backend
-#     sizeGB: 1
-# And switch DATABASE_URL back to: sqlite+aiosqlite:///./events.db
-# ─────────────────────────────────────────────────────────────────────
-
-# ─────────────────────────────────────────────────────────────────────
-# FREE-TIER DAILY SCRAPING STRATEGY
-# ─────────────────────────────────────────────────────────────────────
-# Render free tier spins down after 15 min of inactivity.
-# APScheduler inside the app fires at 02:00 UTC IF the app is awake.
-# To guarantee daily scraping even when idle, use ONE of:
-#
-# Option A — GitHub Actions (recommended, completely free):
-#   .github/workflows/daily_refresh.yml
-#   Set secret BACKEND_URL = https://your-app.onrender.com
-#   Pings /health to wake service, then POST /api/refresh
-#
-# Option B — cron-job.org (free):
-#   Add a job: GET https://your-app.onrender.com/health every 10 min
-#   This keeps the service warm AND prevents spin-down
-#   Add a separate job: POST /api/refresh daily at 02:05 UTC
-# ─────────────────────────────────────────────────────────────────────
