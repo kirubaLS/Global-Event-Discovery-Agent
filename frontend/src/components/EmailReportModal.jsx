@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { X, Mail, Send, CheckCircle, AlertCircle, Loader } from 'lucide-react'
 import { pushEvent } from '../lib/gtm'
+import { isFreeEmailDomain } from '../lib/workEmail'
 
 export default function EmailReportModal({
   isOpen, onClose, events, profile, dealSizeCategory,
@@ -22,6 +23,7 @@ export default function EmailReportModal({
 
   const handleSend = async () => {
     if (!email || !email.includes('@')) { setErrMsg('Please enter a valid email address.'); return }
+    if (isFreeEmailDomain(email)) { setErrMsg('Please use your company work email, not a personal address (e.g. Gmail, Yahoo).'); return }
     setStatus('sending'); setErrMsg('')
     try {
       const BASE = import.meta.env.VITE_API_URL || ''

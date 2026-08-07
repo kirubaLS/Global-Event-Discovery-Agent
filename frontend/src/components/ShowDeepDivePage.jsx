@@ -18,6 +18,7 @@
 import { useState, useEffect, useRef } from 'react'
 import ICPForm from './ICPForm'
 import MeetingPotentialCard from './MeetingPotentialCard'
+import { isFreeEmailDomain } from '../lib/workEmail'
 import '../show-deep-dive.css'
 
 // ── Fit grade ─────────────────────────────────────────────────────
@@ -231,6 +232,7 @@ export default function ShowDeepDivePage({
   const handleCompanyUnlock = () => {
     if (!gateEmail.trim()) { setGateError('Enter your work email to see all companies'); return }
     if (!gateEmail.includes('@')) { setGateError('Enter a valid email'); return }
+    if (isFreeEmailDomain(gateEmail)) { setGateError('Please use your company work email, not a personal address (e.g. Gmail, Yahoo)'); return }
     setCompanyUnlocked(true)
     setGateError('')
   }

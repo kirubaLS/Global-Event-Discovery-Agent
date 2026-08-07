@@ -14,6 +14,7 @@ import cache
 import db
 from config import get_settings
 from gpt_search import run_gpt_event_search
+from work_email import is_valid_work_email, WORK_EMAIL_ERROR
 
 router = APIRouter()
 settings = get_settings()
@@ -41,6 +42,10 @@ async def search(req: SearchRequest, request: Request):
         raise HTTPException(status_code=400, detail="Invalid submission.")
     if not (req.profile.get("buyer_description") or req.profile.get("target_industries")):
         raise HTTPException(status_code=422, detail="Describe your buyer first.")
+    # Corporate email only — the form sends email inside the profile
+    email = (req.profile.get("email") or "").strip()
+    if email and not is_valid_work_email(email):
+        raise HTTPException(status_code=422, detail=WORK_EMAIL_ERROR)
 
     ip         = _client_ip(request)
     device_id  = request.headers.get("x-device-id", "")

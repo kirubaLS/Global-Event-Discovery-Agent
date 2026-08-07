@@ -434,6 +434,10 @@ async def email_report(request: EmailReportRequest, http_request: Request):
     if not request.email or "@" not in request.email:
         raise HTTPException(status_code=422, detail="Invalid email address.")
 
+    from work_email import is_valid_work_email, WORK_EMAIL_ERROR
+    if not is_valid_work_email(request.email):
+        raise HTTPException(status_code=422, detail=WORK_EMAIL_ERROR)
+
     if not request.events:
         raise HTTPException(status_code=400, detail="No events provided for the report.")
 
