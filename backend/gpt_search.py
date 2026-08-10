@@ -144,14 +144,95 @@ def _grade_from_score(score: float) -> tuple:
     return "C", "Marginal fit"
 
 
+# Region names users type in the geo field → member countries the event's
+# "City, Country" place string can actually contain. Lowercase everything.
+_REGIONS = {
+    "europe": [
+        "albania", "austria", "belgium", "bosnia", "bulgaria", "croatia",
+        "cyprus", "czech", "denmark", "estonia", "finland", "france",
+        "germany", "greece", "hungary", "iceland", "ireland", "italy",
+        "latvia", "lithuania", "luxembourg", "malta", "monaco",
+        "netherlands", "north macedonia", "norway", "poland", "portugal",
+        "romania", "serbia", "slovakia", "slovenia", "spain", "sweden",
+        "switzerland", "türkiye", "turkey", "uk", "united kingdom",
+        "england", "scotland", "wales",
+    ],
+    "asia": [
+        "bangladesh", "cambodia", "china", "hong kong", "india",
+        "indonesia", "japan", "malaysia", "nepal", "pakistan",
+        "philippines", "singapore", "south korea", "korea", "sri lanka",
+        "taiwan", "thailand", "vietnam",
+    ],
+    "middle east": [
+        "bahrain", "egypt", "israel", "jordan", "kuwait", "lebanon",
+        "oman", "qatar", "saudi arabia", "uae", "united arab emirates",
+        "dubai", "abu dhabi",
+    ],
+    "africa": [
+        "algeria", "egypt", "ethiopia", "ghana", "kenya", "morocco",
+        "nigeria", "rwanda", "south africa", "tanzania", "tunisia",
+        "uganda",
+    ],
+    "north america": ["canada", "mexico", "united states", "usa", "us"],
+    "south america": [
+        "argentina", "brazil", "chile", "colombia", "ecuador", "peru",
+        "uruguay", "venezuela",
+    ],
+    "oceania": ["australia", "new zealand"],
+}
+_REGIONS["apac"] = _REGIONS["asia"] + _REGIONS["oceania"]
+_REGIONS["asia pacific"] = _REGIONS["apac"]
+_REGIONS["southeast asia"] = [
+    "cambodia", "indonesia", "malaysia", "myanmar", "philippines",
+    "singapore", "thailand", "vietnam",
+]
+_REGIONS["eu"] = _REGIONS["europe"]
+_REGIONS["emea"] = _REGIONS["europe"] + _REGIONS["middle east"] + _REGIONS["africa"]
+_REGIONS["latin america"] = _REGIONS["south america"] + ["mexico"]
+_REGIONS["latam"] = _REGIONS["latin america"]
+_REGIONS["gcc"] = ["bahrain", "kuwait", "oman", "qatar", "saudi arabia",
+                   "uae", "united arab emirates", "dubai", "abu dhabi"]
+_REGIONS["nordics"] = ["denmark", "finland", "iceland", "norway", "sweden"]
+_REGIONS["dach"] = ["germany", "austria", "switzerland"]
+
+# Every country name we know (the union of all region member lists) —
+# used to decide whether a typed geo term is one we can strictly enforce.
+_KNOWN_COUNTRIES = {c for members in _REGIONS.values() for c in members}
+
+# Common country aliases: what the user types → what the place may say
+_GEO_ALIASES = {
+    "usa": ["united states", "usa", "us"],
+    "united states": ["united states", "usa", "us"],
+    "uk": ["united kingdom", "uk", "england", "scotland", "wales", "london"],
+    "united kingdom": ["united kingdom", "uk", "england", "scotland", "wales"],
+    "uae": ["uae", "united arab emirates", "dubai", "abu dhabi"],
+    "netherlands": ["netherlands", "holland"],
+    "south korea": ["south korea", "korea"],
+}
+
+
 def _geo_ok(place: str, geos: list) -> bool:
-    """Hard server-side backstop for rule 2: place must mention one of
-    the requested geographies (skip when Global / empty)."""
-    real = [g for g in (geos or []) if g and g.lower() != "global"]
+    """Hard server-side backstop for rule 2: the event's place must fall
+    inside one of the requested geographies. Handles region names
+    ("Europe" matches "Munich, Germany") and common aliases ("UK" vs
+    "United Kingdom"). Unknown geo terms fail open — GPT's own hard
+    filter (rule 2) already constrained the search, this only catches
+    obvious violations, it must never nuke a whole valid result set."""
+    real = [g.strip().lower() for g in (geos or []) if g and g.lower() != "global"]
     if not real:
         return True
     p = (place or "").lower()
-    return any(g.lower() in p for g in real)
+    all_unknown = True
+    for g in real:
+        terms = _REGIONS.get(g) or _GEO_ALIASES.get(g) or [g]
+        if any(t in p for t in terms):
+            return True
+        if g in _REGIONS or g in _GEO_ALIASES or g in _KNOWN_COUNTRIES:
+            all_unknown = False   # recognised geo, genuinely didn't match
+    # Every requested geo is a term we can't map (a city, an unusual
+    # spelling): we can't verify it server-side, so trust GPT's own hard
+    # geography filter rather than nuking the whole result set.
+    return all_unknown
 
 
 def _validate_events(raw_events: list, profile: dict) -> list:
