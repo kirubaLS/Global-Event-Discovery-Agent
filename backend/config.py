@@ -33,7 +33,9 @@ class Settings(BaseSettings):
     openai_timeout_seconds: int = 240
     # Small/cheap model for the live ICP-form parse (role+industry chips).
     # No web search — one tiny JSON completion per debounced form edit.
-    openai_parse_model: str = "gpt-5-mini"
+    # gpt-4.1-nano: no reasoning pass, sub-second replies, ~$0.10/M input
+    # — the chips must feel instant, this is a UI hint not the search.
+    openai_parse_model: str = "gpt-4.1-nano"
 
     # ── Storage (optional — Neon Postgres). Unset = nothing stored. ─
     database_url: str = ""
