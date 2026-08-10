@@ -22,7 +22,10 @@ class Settings(BaseSettings):
     # ── OpenAI (ChatGPT with real web search) ─────────────────────
     openai_api_key: str = ""
     # Must be a model that supports the Responses API `web_search` tool.
-    openai_search_model: str = "gpt-4o"
+    # gpt-5 (reasoning): iterative search + verification, and web_search
+    # tool calls cost $10/1k vs $25/1k on gpt-4o. Slower (~40-90s) but
+    # more accurate — the frontend's loading overlay covers the wait.
+    openai_search_model: str = "gpt-5"
     openai_timeout_seconds: int = 180
 
     # ── Storage (optional — Neon Postgres). Unset = nothing stored. ─
