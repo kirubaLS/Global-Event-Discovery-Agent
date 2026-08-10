@@ -104,9 +104,68 @@ class ParseIcpRequest(BaseModel):
     text: str = ""
 
 
+_PARSE_PROMPT = """Extract the buyer targeting from this B2B ICP text. Reply with ONE JSON object only:
+{
+  "personas": ["<role titles, e.g. CIO, Head of Procurement>"],
+  "industries": ["<industries/verticals, e.g. NBFC / Non-Bank Lending, Manufacturing>"],
+  "segments": [{"personas": ["<role>"], "industries": ["<industry>"]}],
+  "extra_keywords": ["<other targeting words worth keeping, e.g. mid-market, APAC>"]
+}
+Rules: use the user's own vocabulary (expand well-known abbreviations, e.g. NBFC → "NBFC / Non-Bank Lending"); `segments` pairs each role with the industry it was stated with ("CEOs at BFSI, CIOs at Medtech" → 2 segments); if the text is industry-agnostic ("CIOs across all industries") leave industries empty; never invent targeting that is not in the text; empty arrays are fine."""
+
+
 @router.post("/parse-icp")
-async def parse_icp(_: ParseIcpRequest):
-    return {"source": "rules"}             # keep ICPForm's local keyword parse
+async def parse_icp(req: ParseIcpRequest):
+    """LLM parse of the raw buyer text — powers the live role+industry
+    chips in the ICP form. No keyword tables: the model reads the exact
+    wording. Falls back to {"source":"rules"} on any failure so the form
+    never breaks. Results cached in Redis for 7 days (debounced typing
+    and repeat visitors hit the same strings constantly)."""
+    text = (req.text or "").strip()
+    if len(text) < 4:
+        return {"source": "rules"}
+    if not settings.openai_api_key:
+        return {"source": "rules"}
+
+    import hashlib
+    key = f"parse:{hashlib.sha256(text.lower().encode()).hexdigest()}"
+    cached = await cache.get_json(key)
+    if cached:
+        return cached
+
+    try:
+        import json as _json
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=20)
+        kwargs = dict(
+            model=settings.openai_parse_model,
+            input=[{"role": "system", "content": _PARSE_PROMPT},
+                   {"role": "user", "content": text}],
+        )
+        if settings.openai_parse_model.lower().startswith(("gpt-5", "o1", "o3", "o4")):
+            kwargs["reasoning"] = {"effort": "minimal"}
+        resp = await client.responses.create(**kwargs)
+        raw = resp.output_text.strip()
+        if raw.startswith("```"):
+            raw = raw.strip("`\n")
+            raw = raw[raw.find("{"):]
+        data = _json.loads(raw[raw.find("{"):raw.rfind("}") + 1])
+        result = {
+            "source": "llm",
+            "personas": [str(p) for p in (data.get("personas") or [])][:6],
+            "industries": [str(i) for i in (data.get("industries") or [])][:6],
+            "segments": [
+                {"personas": [str(p) for p in (s.get("personas") or [])],
+                 "industries": [str(i) for i in (s.get("industries") or [])]}
+                for s in (data.get("segments") or []) if isinstance(s, dict)
+            ][:4],
+            "extra_keywords": [str(k) for k in (data.get("extra_keywords") or [])][:8],
+        }
+        await cache.set_json(key, result)
+        return result
+    except Exception as e:
+        logger.warning(f"parse-icp LLM failed: {e}")
+        return {"source": "rules"}
 
 
 @router.get("/geo-list")
