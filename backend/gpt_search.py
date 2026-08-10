@@ -38,7 +38,12 @@ SYSTEM_PROMPT = """You are a B2B event-intelligence researcher for LeadStrategus
 NON-NEGOTIABLE RULES
 1. VERIFIED EVENTS ONLY. Every event must have a live official website or registration page that you actually found via web search. Never invent an event, an edition, a date, a venue, or a URL. If you cannot verify it, it does not go in the list.
 2. GEOGRAPHY IS A HARD FILTER. If the ICP says India, return ONLY events physically held in India. Never substitute Dubai/Singapore/US events "because they are bigger". If fewer than 6 verified events exist in the geography + date window, return fewer than 6 and explain in `search_notes` — a short honest list beats a padded one.
-3. PERSONA ATTENDANCE IS A HARD FILTER. Ask for each candidate: "would the stated persona (e.g. a CEO of a healthcare company in India) genuinely attend this?" A CEO attends leadership summits, industry flagship expos, investor/innovation conferences — not an academic paper workshop or a technicians' training day. Drop events the persona would not attend.
+3. PERSONA ATTENDANCE IS A HARD FILTER — FOR ANY KIND OF ROLE. Ask for each candidate: "would THIS specific persona genuinely attend this event?" Match the event's audience to the role's level and function, whatever it is:
+   • C-level / founders (CEO, CFO, CMO, founder) → leadership summits, flagship industry expos, investor and innovation conferences — not academic workshops or technician training days.
+   • Technical leaders (CISO, CTO, VP Engineering, Head of Data) → the field's flagship technical/security/tech conferences and practitioner summits where leaders speak and evaluate vendors.
+   • Functional heads (HR, procurement, supply chain, marketing, finance, operations directors/managers) → that function's dedicated conferences and the industry's major trade shows where the function is a named audience track.
+   • Practitioners / specialists (developers, doctors, engineers, designers, analysts) → hands-on practitioner conferences, professional-association congresses, certification/skills events.
+   The SAME event can be right for one role and wrong for another — judge against the stated role, not a generic "decision-maker". If the ICP mixes roles, prioritise events attracting several of them. Drop events the stated persona would not personally attend.
 4. DATE WINDOW IS A HARD FILTER. Only events whose start date is in the future AND inside the requested date window (date_from → date_to). Confirm the date is for the UPCOMING edition, not last year's page.
 5. NO FABRICATED NUMBERS. est_attendees must come from the organiser's site or credible coverage of the latest edition. If unknown, use 0 — never guess. Same for pricing and sponsors: unknown → empty string.
 6. URLS: `event_link` and `source_url` must be the official event website (deep link to the specific upcoming edition, e.g. a page containing the year). `registration_url` is the ticket/registration page if it exists, else "". Never use Google search links, LinkedIn, Facebook, Wikipedia, meetup.com, or venue-only websites (hotel/expo-centre homepages).
@@ -144,16 +149,6 @@ def _grade_from_score(score: float) -> tuple:
     return "C", "Marginal fit"
 
 
-def _geo_ok(place: str, geos: list) -> bool:
-    """Hard server-side backstop for rule 2: place must mention one of
-    the requested geographies (skip when Global / empty)."""
-    real = [g for g in (geos or []) if g and g.lower() != "global"]
-    if not real:
-        return True
-    p = (place or "").lower()
-    return any(g.lower() in p for g in real)
-
-
 def _validate_events(raw_events: list, profile: dict) -> list:
     today = date.today().isoformat()
     date_to = profile.get("date_to") or ""
@@ -170,8 +165,10 @@ def _validate_events(raw_events: list, profile: dict) -> list:
             continue                      # past event → drop
         if date_to and start and start[:10] > date_to:
             continue                      # outside requested window → drop
-        if not _geo_ok(ev.get("place", ""), profile.get("target_geographies")):
-            continue                      # wrong country → drop
+        # Geography is enforced by the GPT prompt itself (hard filter,
+        # rule 2) — no server-side country mapping. Whatever designation
+        # and country the user typed goes to GPT verbatim, and GPT's
+        # results come back unfiltered on geo.
         try:
             score = float(ev.get("relevance_score") or 0)
         except (TypeError, ValueError):
