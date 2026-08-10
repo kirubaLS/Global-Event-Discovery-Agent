@@ -139,6 +139,42 @@ What this codebase actually touches, and what it needs:
 
 ---
 
+## 5. Multi-Jurisdiction Client Engagements (UK Account Research, US / India / Europe ABM)
+
+LeadStrategus runs delivery for clients across four regimes. **The law that applies follows the data subject (the prospect), not the client** — a UK client asking for research on German prospects puts you under EU GDPR, not just UK rules. DPDP compliance alone does not cover this book of business.
+
+### 5.1 Jurisdiction Matrix
+
+| Engagement | Governing law for prospect data | Legal basis for B2B outreach | Key exposure |
+|---|---|---|---|
+| **UK — account research / model building** | UK GDPR + Data Protection Act 2018 + PECR | Legitimate Interests possible for B2B research, **but requires a documented Legitimate Interests Assessment (LIA)** | ICO fines up to £17.5M / 4% global turnover; PECR for any resulting outreach |
+| **US — ABM** | CAN-SPAM (email), TCPA (calls/SMS), state laws: CCPA/CPRA (California), Colorado, Virginia, Texas etc. | No consent needed for B2B email (opt-out regime), **but** CCPA gives Californians deletion/opt-out-of-sale rights — and "sale" includes sharing lead data for value | TCPA is the trap: $500–$1,500 **per call/text**, class-action driven; CCPA "sale" disclosures for lead resale |
+| **India — ABM** | DPDP Act 2023 (this report) + TRAI TCCCPR/DND | Consent or Legitimate Use (narrow — no marketing carve-out) | Up to ₹250 Cr; DND penalties for tele-calling |
+| **Europe (EU) — ABM** | EU GDPR + national ePrivacy laws | Legitimate Interests + LIA for research; **cold email consent rules vary by country** (Germany/Italy/Netherlands effectively require opt-in even for B2B) | 4% global turnover; Germany's UWG allows competitors to sue over cold outreach |
+
+### 5.2 Account Research & "Model Building" (UK client)
+
+- Building propensity/intent **models on personal data is profiling under UK/EU GDPR** — it needs a lawful basis of its own, separate from the outreach basis, and a **DPIA** if done systematically at scale.
+- **Model building does not launder personal data.** If the training set was unlawfully scraped, the ICO's position is the derived model can be tainted too — regulators have ordered model deletion (ICO/FTC precedents on Clearview-style scraping).
+- Individuals retain the **right to object to profiling** — you need a mechanism to exclude a person from models on request, not just from mailing lists.
+- Account-level firmographics (company size, tech stack, funding) are **not** personal data — build models on those where possible; only contact-level fields (names, emails, job history, behaviour) trigger GDPR. This is the cheapest de-risking lever: **model at the account level, personalise only after a lawful basis exists for the individual.**
+
+### 5.3 Cross-Border Architecture
+
+- **UK/EU → India transfers:** India has **no UK or EU adequacy decision.** Every flow of UK/EU prospect or client data into LeadStrategus India systems needs **Standard Contractual Clauses (SCCs / UK IDTA)** plus a Transfer Risk Assessment. Without them the delivery model itself is unlawful, regardless of consent.
+- **UK/EU representative:** processing UK/EU personal data without an establishment there triggers the **Article 27 requirement to appoint a local representative** for each regime.
+- **Per-engagement roles:** define in each contract whether LeadStrategus is *processor* (client supplies the list, you execute) or *controller/fiduciary* (you source the data). Under GDPR, a processor that sources its own data **becomes a controller** with full obligations — most "we also enrich the list" engagements silently cross this line.
+- **Segment the database by regime.** One pooled global lead database is the worst posture: an EU record mixed into an India campaign inherits GDPR, and vice versa. Tag every record with jurisdiction + source + legal basis, and gate campaign tools so a US ABM campaign physically cannot pull EU records.
+
+### 5.4 Practical Rules per Campaign Type
+
+- **US ABM:** email is opt-out (honour unsubscribes within 10 business days, no misleading headers, postal address in footer); never call/text without checking TCPA consent; screen California records for CCPA opt-out-of-sale.
+- **Europe ABM:** country-by-country cold-email rules — maintain a matrix (opt-in countries vs. legitimate-interest countries) and route campaigns through it; sending one template to "Europe" is not compliant.
+- **India ABM:** full DPDP program per Sections 1–3 of this report; use registered telemarketer headers for SMS/calls.
+- **UK research:** LIA on file per project, DPIA for model building, honour objections, SCC/IDTA covering the data flow to India.
+
+---
+
 ## Recommendation for the CEO
 
 > "The era of 'bulk data' is ending; the era of 'verified data' is starting. We should pivot LeadStrategus to be a **Compliance-First Lead Partner**. We shouldn't just sell leads; we should sell **'Safe, Consented Leads.'** This justifies a premium price point and protects our clients from legal risk. Every obligation above — consent artefacts, source tags, breach readiness, consent-manager integration — is also a sales asset: it is the audit trail our clients will soon be forced to demand from every vendor."
