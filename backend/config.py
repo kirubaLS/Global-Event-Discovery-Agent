@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # to tens of seconds. Raise to "medium" only if result quality dips.
     openai_reasoning_effort: str = "low"
     openai_timeout_seconds: int = 240
+    # Small/cheap model for the live ICP-form parse (role+industry chips).
+    # No web search — one tiny JSON completion per debounced form edit.
+    openai_parse_model: str = "gpt-5-mini"
 
     # ── Storage (optional — Neon Postgres). Unset = nothing stored. ─
     database_url: str = ""

@@ -88,6 +88,30 @@ async def set_cached_search(profile: dict, result: dict) -> None:
         logger.warning(f"cache set failed: {e}")
 
 
+# ── Generic small-value cache (ICP parse results etc.) ──────────────
+
+async def get_json(key: str):
+    client = await _get_client()
+    if not client:
+        return None
+    try:
+        raw = await client.get(key)
+        return json.loads(raw) if raw else None
+    except Exception as e:
+        logger.warning(f"cache get_json failed: {e}")
+        return None
+
+
+async def set_json(key: str, value, ttl_seconds: int = 604800) -> None:
+    client = await _get_client()
+    if not client:
+        return
+    try:
+        await client.set(key, json.dumps(value), ex=ttl_seconds)
+    except Exception as e:
+        logger.warning(f"cache set_json failed: {e}")
+
+
 # ── Daily rate limit ────────────────────────────────────────────────
 
 async def check_rate_limit(device_id: str, ip: str) -> Optional[str]:
