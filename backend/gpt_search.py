@@ -149,32 +149,6 @@ def _grade_from_score(score: float) -> tuple:
     return "C", "Marginal fit"
 
 
-from geo_data import resolve_geo_term
-
-
-def _geo_ok(place: str, geos: list) -> bool:
-    """Hard server-side backstop for rule 2: the event's place must fall
-    inside one of the requested geographies. geo_data.py covers every
-    country in the world plus regions (Europe, APAC, EMEA, LATAM, GCC,
-    Nordics, ...) and aliases (UK/United Kingdom, USA/US, UAE/Dubai).
-    'Global' or empty → everything passes. A term we cannot map at all
-    (a city, an unusual spelling) fails open — GPT's own hard geography
-    filter already constrained the search; this backstop only rejects
-    verifiable violations, it must never nuke a valid result set."""
-    real = [g.strip().lower() for g in (geos or []) if g and g.strip().lower() != "global"]
-    if not real:
-        return True
-    p = (place or "").lower()
-    all_unknown = True
-    for g in real:
-        kind, terms = resolve_geo_term(g)
-        if any(t in p for t in terms):
-            return True
-        if kind != "unknown":
-            all_unknown = False   # recognised geo, genuinely didn't match
-    return all_unknown
-
-
 def _validate_events(raw_events: list, profile: dict) -> list:
     today = date.today().isoformat()
     date_to = profile.get("date_to") or ""
@@ -191,8 +165,10 @@ def _validate_events(raw_events: list, profile: dict) -> list:
             continue                      # past event → drop
         if date_to and start and start[:10] > date_to:
             continue                      # outside requested window → drop
-        if not _geo_ok(ev.get("place", ""), profile.get("target_geographies")):
-            continue                      # wrong country → drop
+        # Geography is enforced by the GPT prompt itself (hard filter,
+        # rule 2) — no server-side country mapping. Whatever designation
+        # and country the user typed goes to GPT verbatim, and GPT's
+        # results come back unfiltered on geo.
         try:
             score = float(ev.get("relevance_score") or 0)
         except (TypeError, ValueError):
