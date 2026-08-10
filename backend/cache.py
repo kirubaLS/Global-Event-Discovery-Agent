@@ -52,10 +52,11 @@ async def _get_client():
 def search_cache_key(profile: dict) -> str:
     """Stable key from the fields that actually change the search."""
     basis = {
+        # Raw buyer text only — parsed industry/persona lists are no longer
+        # sent to GPT (it identifies roles/industries itself), so they must
+        # not split the cache either.
         "buyer": (profile.get("buyer_description") or "").strip().lower(),
-        "industries": sorted(x.lower() for x in profile.get("target_industries") or []),
-        "personas":   sorted(x.lower() for x in profile.get("target_personas") or []),
-        "geos":       sorted(x.lower() for x in profile.get("target_geographies") or []),
+        "geos":  sorted(x.lower() for x in profile.get("target_geographies") or []),
         "from":  profile.get("date_from") or "",
         "to":    profile.get("date_to") or "",
         "deal":  profile.get("avg_deal_size_category") or "",
