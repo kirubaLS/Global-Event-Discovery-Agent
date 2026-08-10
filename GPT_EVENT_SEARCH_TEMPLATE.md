@@ -67,16 +67,13 @@ Reply with ONE JSON object and NOTHING else — no prose, no markdown fences.
 ```
 TODAY'S DATE: {{today}}
 
-ICP (raw form input — treat `buyer_description` as the source of truth; the parsed lists are hints):
-- Buyer description (raw): {{buyer_description}}
+ICP (raw form input — YOU identify the roles/designations and industries from the buyer description yourself; no pre-parsed lists are provided, and any wording is valid):
+- Buyer description (raw, source of truth): {{buyer_description}}
 - Company: {{company_name}}
-- Target industries: {{target_industries or "any (infer from buyer description)"}}
-- Target personas: {{target_personas or "infer from buyer description"}}
 - Target geographies (HARD filter — events must be physically held here): {{target_geographies or "Global"}}
 - Date window (HARD filter): {{date_from}} to {{date_to}}
 - Average deal size: {{avg_deal_size_category}}
 - Preferred event types: conference, trade show, summit, expo
-- Extra keywords: {{extra_keywords}}
 - Existing client names (similar buyers): {{client_names}}
 
 TASK: Using real web search, find and rank the top 6 upcoming verified events matching ALL hard filters, following every rule in your instructions, and reply with the single JSON object only.

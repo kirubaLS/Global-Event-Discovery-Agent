@@ -87,21 +87,16 @@ def build_user_prompt(profile: dict) -> str:
     lines = [
         f"TODAY'S DATE: {today}",
         "",
-        "ICP (raw form input — treat `buyer_description` as the source of truth; the parsed lists are hints):",
-        f"- Buyer description (raw): {profile.get('buyer_description') or '-'}",
+        "ICP (raw form input — YOU identify the roles/designations and industries from the buyer "
+        "description yourself; no pre-parsed lists are provided, and any wording is valid):",
+        f"- Buyer description (raw, source of truth): {profile.get('buyer_description') or '-'}",
         f"- Company: {profile.get('company_name') or '-'}",
-        f"- Target industries: {', '.join(profile.get('target_industries') or []) or 'any (infer from buyer description)'}",
-        f"- Target personas: {', '.join(profile.get('target_personas') or []) or 'infer from buyer description'}",
         f"- Target geographies (HARD filter — events must be physically held here): {', '.join(profile.get('target_geographies') or []) or 'Global'}",
         f"- Date window (HARD filter): {profile.get('date_from') or today} to {profile.get('date_to') or 'next 12 months'}",
         f"- Average deal size: {profile.get('avg_deal_size_category') or 'medium'}",
         f"- Preferred event types: {', '.join(profile.get('preferred_event_types') or []) or 'conference, trade show, summit, expo'}",
-        f"- Extra keywords: {', '.join(profile.get('extra_keywords') or []) or '-'}",
         f"- Existing client names (similar buyers): {', '.join(profile.get('client_names') or []) or '-'}",
     ]
-    segs = profile.get("icp_segments") or []
-    if segs:
-        lines.append(f"- Role+industry segments: {json.dumps(segs)}")
     lines += [
         "",
         "TASK: Using real web search, find and rank the top 6 upcoming verified events matching ALL hard filters, "
