@@ -269,7 +269,7 @@ export default function ICPForm({
         if (data?.source === 'llm')
           setLlmParse({ forText: text, ...data })
       } catch (_) { /* keep local keyword parse */ }
-    }, 900)
+    }, 500)
     return () => clearTimeout(llmParseTimer.current)
   }, [buyer])
 

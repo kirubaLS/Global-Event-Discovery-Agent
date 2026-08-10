@@ -136,11 +136,14 @@ async def parse_icp(req: ParseIcpRequest):
     try:
         import json as _json
         from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=20)
+        client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=8)
         kwargs = dict(
             model=settings.openai_parse_model,
             input=[{"role": "system", "content": _PARSE_PROMPT},
                    {"role": "user", "content": text}],
+            # Chips are a few short arrays — cap hard so a runaway reply
+            # can never make the form feel slow or cost real money.
+            max_output_tokens=300,
         )
         if settings.openai_parse_model.lower().startswith(("gpt-5", "o1", "o3", "o4")):
             kwargs["reasoning"] = {"effort": "minimal"}
