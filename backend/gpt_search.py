@@ -214,7 +214,7 @@ async def run_gpt_event_search(profile: dict) -> dict:
     client = AsyncOpenAI(api_key=settings.openai_api_key,
                          timeout=settings.openai_timeout_seconds)
 
-    resp = await client.responses.create(
+    kwargs = dict(
         model=settings.openai_search_model,
         tools=[{"type": "web_search"}],
         input=[
@@ -222,6 +222,19 @@ async def run_gpt_event_search(profile: dict) -> dict:
             {"role": "user",   "content": build_user_prompt(profile)},
         ],
     )
+    # Reasoning models (gpt-5, o-series) accept an effort control —
+    # "low" cuts the wait from minutes to tens of seconds. Non-reasoning
+    # models (gpt-4o) reject the param, so only send it where valid.
+    model = settings.openai_search_model.lower()
+    if model.startswith(("gpt-5", "o1", "o3", "o4")):
+        kwargs["reasoning"] = {"effort": settings.openai_reasoning_effort}
+
+    import time
+    t0 = time.monotonic()
+    logger.info(f"GPT web search started (model={settings.openai_search_model}, "
+                f"effort={kwargs.get('reasoning', {}).get('effort', '-')})")
+    resp = await client.responses.create(**kwargs)
+    logger.info(f"GPT web search responded in {time.monotonic() - t0:.0f}s")
     payload = _extract_json(resp.output_text)
     events = _validate_events(payload.get("events"), profile)
     logger.info(f"GPT web search: {len(payload.get('events') or [])} returned, "

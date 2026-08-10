@@ -26,7 +26,11 @@ class Settings(BaseSettings):
     # tool calls cost $10/1k vs $25/1k on gpt-4o. Slower (~40-90s) but
     # more accurate — the frontend's loading overlay covers the wait.
     openai_search_model: str = "gpt-5"
-    openai_timeout_seconds: int = 180
+    # Reasoning effort for gpt-5/o-series: low keeps the iterative
+    # search-and-verify behaviour but cuts thinking time from minutes
+    # to tens of seconds. Raise to "medium" only if result quality dips.
+    openai_reasoning_effort: str = "low"
+    openai_timeout_seconds: int = 240
 
     # ── Storage (optional — Neon Postgres). Unset = nothing stored. ─
     database_url: str = ""
