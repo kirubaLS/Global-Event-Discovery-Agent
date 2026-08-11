@@ -236,6 +236,28 @@ async def log_email_report(email: str, event_count: int, company_name: str,
         logger.warning(f"log_email_report failed: {e}")
 
 
+async def count_searches_today(ip: str, device_id: str) -> int:
+    """Rate-limit fallback when Redis is unreachable: how many searches
+    this IP OR device has already made since UTC midnight. Returns 0
+    when the DB is also unavailable (both layers down → fail open)."""
+    pool = await _get_pool()
+    if not pool:
+        return 0
+    try:
+        async with pool.acquire() as con:
+            row = await con.fetchrow(
+                """SELECT count(*) AS n FROM icp_submissions
+                   WHERE created_at >= date_trunc('day', now() AT TIME ZONE 'utc')
+                     AND ((ip_address <> '' AND ip_address = $1)
+                          OR (device_id <> '' AND device_id = $2))""",
+                ip or "", device_id or "",
+            )
+            return int(row["n"] or 0)
+    except Exception as e:
+        logger.warning(f"count_searches_today failed: {e}")
+        return 0
+
+
 async def log_consent(consent_type: str, accepted: bool, categories: list,
                       ip: str, session_id: str) -> None:
     pool = await _get_pool()

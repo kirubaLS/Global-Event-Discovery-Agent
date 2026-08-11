@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     # ── Upstash Redis (optional). Unset = no cache, no rate limit. ──
     redis_url: str = ""
     search_cache_ttl_seconds: int = 86400   # identical ICP → reuse result 24h
-    search_daily_limit: int = 10            # searches per device/IP per UTC day (0 = off)
+    search_daily_limit: int = 3             # searches per device AND per IP per UTC day (0 = off)
 
     # ── Email report (Resend) ─────────────────────────────────────
     resend_api_key: str = ""

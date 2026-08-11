@@ -417,7 +417,7 @@ export default function ICPForm({
     return Object.keys(e).length === 0
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate()) {
       // The submit button sits below a long form - without this, a failed
       // validation is invisible and the click looks like a dead button.
@@ -425,6 +425,20 @@ export default function ICPForm({
       requestAnimationFrame(() => {
         document
           .querySelector('.icp-input--error, .icp-error')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
+      return
+    }
+    // Deep server-side email check: disposable providers and invented
+    // company domains (no mail server behind them) are rejected before
+    // the search is spent. Fails open on network trouble - the backend
+    // re-verifies on /api/search regardless.
+    const emailCheck = await api.validateEmail(email.trim())
+    if (!emailCheck.valid) {
+      setErrors(p => ({ ...p, email: emailCheck.reason || 'Please use a real company email address.' }))
+      toast.error(emailCheck.reason || 'Please use a real company email address.')
+      requestAnimationFrame(() => {
+        document.querySelector('.icp-input--error, .icp-error')
           ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       })
       return
