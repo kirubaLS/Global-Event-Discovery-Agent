@@ -102,8 +102,8 @@ async def maintenance_status():
 async def stats():
     # Static marketing-level numbers; the event DB no longer exists.
     return {
-        "total_events_in_db": 11000,
-        "countries_covered": 90,
+        "total_events_in_db": 17000,
+        "countries_covered": 129,
         "live_sources": 1,
         "top_event_names": [],
         "resend_enabled": bool(settings.resend_api_key),
