@@ -14,7 +14,7 @@ import cache
 import db
 from config import get_settings
 from gpt_search import run_gpt_event_search
-from work_email import is_valid_work_email, WORK_EMAIL_ERROR
+from work_email import is_valid_work_email, verify_work_email, WORK_EMAIL_ERROR
 
 router = APIRouter()
 settings = get_settings()
@@ -42,17 +42,29 @@ async def search(req: SearchRequest, request: Request):
         raise HTTPException(status_code=400, detail="Invalid submission.")
     if not (req.profile.get("buyer_description") or req.profile.get("target_industries")):
         raise HTTPException(status_code=422, detail="Describe your buyer first.")
-    # Corporate email only — the form sends email inside the profile
+    # Corporate email only — free/disposable providers and domains that
+    # don't actually receive mail (no MX record) are all rejected.
     email = (req.profile.get("email") or "").strip()
-    if email and not is_valid_work_email(email):
-        raise HTTPException(status_code=422, detail=WORK_EMAIL_ERROR)
+    if email:
+        ok, reason = await verify_work_email(email)
+        if not ok:
+            raise HTTPException(status_code=422, detail=reason)
 
     ip         = _client_ip(request)
     device_id  = request.headers.get("x-device-id", "")
     session_id = request.headers.get("x-session-id", "")
 
-    # Daily cap (Upstash Redis; fails open when unset/down)
+    # Daily cap: IP and device are limited independently — exceeding
+    # either blocks. Redis is the primary counter; if it's unreachable
+    # the submissions table is the fallback so the limit survives a
+    # Redis outage (only both layers down fails open).
     limit_msg = await cache.check_rate_limit(device_id, ip)
+    if limit_msg == "redis_down":
+        if await db.count_searches_today(ip, device_id) >= settings.search_daily_limit > 0:
+            limit_msg = (f"Daily search limit reached ({settings.search_daily_limit}/day). "
+                         "Try again tomorrow, or contact us for more.")
+        else:
+            limit_msg = None
     if limit_msg:
         raise HTTPException(status_code=429, detail=limit_msg)
 
@@ -102,6 +114,21 @@ async def stats():
 
 class ParseIcpRequest(BaseModel):
     text: str = ""
+
+
+class ValidateEmailRequest(BaseModel):
+    email: str = ""
+
+
+@router.post("/validate-email")
+async def validate_email(req: ValidateEmailRequest):
+    """Live corporate-email check for the forms (ICP + contact): free
+    providers, disposable providers, and domains with no mail server
+    (MX lookup, Redis-cached 24h) are rejected. The search and
+    email-report endpoints re-verify server-side regardless — this
+    endpoint just gives the user instant feedback."""
+    ok, reason = await verify_work_email(req.email)
+    return {"valid": ok, "reason": reason}
 
 
 _PARSE_PROMPT = """Extract the buyer targeting from this B2B ICP text. Reply with ONE JSON object only:

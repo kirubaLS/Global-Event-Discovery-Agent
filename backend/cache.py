@@ -114,22 +114,42 @@ async def set_json(key: str, value, ttl_seconds: int = 604800) -> None:
 
 # ── Daily rate limit ────────────────────────────────────────────────
 
+_LIMIT_MSG = ("Daily search limit reached ({n}/day). "
+              "Try again tomorrow, or contact us for more.")
+
+
 async def check_rate_limit(device_id: str, ip: str) -> Optional[str]:
     """Returns an error message when over the daily cap, else None.
-    Fails OPEN (no Redis → unlimited) so an outage never blocks users."""
-    client = await _get_client()
-    if not client or settings.search_daily_limit <= 0:
+
+    Robust dual-key limit: the IP and the device id are counted as
+    SEPARATE keys and exceeding EITHER blocks the search — clearing
+    localStorage mints a new device id but not a new IP, and rotating
+    IPs on one machine still trips the device key. When Redis is
+    unreachable the caller falls back to counting today's submissions
+    in Postgres (see routes_search), so an outage doesn't disable the
+    limit entirely."""
+    limit = settings.search_daily_limit
+    if limit <= 0:
         return None
-    who = device_id or ip or "anon"
+    client = await _get_client()
+    if not client:
+        return "redis_down"          # sentinel: caller uses the DB fallback
     day = datetime.now(timezone.utc).strftime("%Y%m%d")
-    key = f"rl:{day}:{who}"
+    keys = []
+    if ip:
+        keys.append(f"rl:{day}:ip:{ip}")
+    if device_id:
+        keys.append(f"rl:{day}:dev:{device_id}")
+    if not keys:
+        keys.append(f"rl:{day}:anon")
     try:
-        n = await client.incr(key)
-        if n == 1:
-            await client.expire(key, 86400)
-        if n > settings.search_daily_limit:
-            return (f"Daily search limit reached ({settings.search_daily_limit}/day). "
-                    "Try again tomorrow, or contact us for more.")
+        for key in keys:
+            n = await client.incr(key)
+            if n == 1:
+                await client.expire(key, 86400)
+            if n > limit:
+                return _LIMIT_MSG.format(n=limit)
     except Exception as e:
         logger.warning(f"rate limit check failed: {e}")
+        return "redis_down"
     return None

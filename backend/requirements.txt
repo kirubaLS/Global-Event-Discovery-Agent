@@ -26,5 +26,8 @@ fpdf2
 # ── Email delivery ────────────────────────────────────────────────────
 resend
 
+# ── Email domain verification (MX lookup) ────────────────────────────
+dnspython
+
 # ── Utilities ────────────────────────────────────────────────────────
 loguru

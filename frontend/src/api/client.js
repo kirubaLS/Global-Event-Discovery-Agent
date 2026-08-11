@@ -144,6 +144,16 @@ export const api = {
       method: 'POST',
       body:   JSON.stringify(payload),
     }),
+  // ── Corporate-email verification (free/disposable/no-MX domains) ─
+  // Returns {valid, reason}. Resolves {valid:true} on any network/API
+  // failure so an outage never blocks a form - the backend re-verifies
+  // on the actual submit anyway.
+  validateEmail: (email) =>
+    request('/validate-email', {
+      method: 'POST',
+      body:   JSON.stringify({ email }),
+    }).catch(() => ({ valid: true, reason: '' })),
+
   // ── LLM ICP parse - universal buyer-text parsing ──────
   // Returns {source:'llm', industries, personas, extra_keywords, ...}
   // or {source:'rules'} when the caller should keep its local parse.

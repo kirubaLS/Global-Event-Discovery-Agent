@@ -93,6 +93,15 @@ export default function ContactPage({ onSubmitted }) {
     }
 
     setSubmitting(true)
+    // Deep email check via our backend (disposable providers, invented
+    // domains with no mail server) before handing off to Web3Forms.
+    const emailCheck = await api.validateEmail(email.trim())
+    if (!emailCheck.valid) {
+      setErrors(p => ({ ...p, email: emailCheck.reason || 'Please use a real company email address.' }))
+      toast.error(emailCheck.reason || 'Please use a real company email address.')
+      setSubmitting(false)
+      return
+    }
     try {
       const formData = new FormData()
       formData.append('access_key', WEB3FORMS_ACCESS_KEY)

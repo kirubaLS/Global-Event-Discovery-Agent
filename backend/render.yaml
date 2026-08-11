@@ -38,7 +38,7 @@ services:
       - key: REDIS_URL
         sync: false   # ← rediss://default:<pass>@<host>.upstash.io:6379
       - key: SEARCH_DAILY_LIMIT
-        value: "10"
+        value: "3"
       - key: SEARCH_CACHE_TTL_SECONDS
         value: "86400"
 
