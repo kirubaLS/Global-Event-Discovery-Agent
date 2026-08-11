@@ -355,7 +355,7 @@ export default function ShowRankingPage({
               <div className="rk-banner-label">{bannerParts.join('  ·  ')}</div>
             )}
             <p className="rk-banner-sub">
-              Out of 11,000+ shows, here are the <strong>{top6.length}</strong> where your buyers concentrate.
+              Out of 17,000+ shows, here are the <strong>{top6.length}</strong> where your buyers concentrate.
             </p>
           </div>
         </div>
