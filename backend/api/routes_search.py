@@ -49,6 +49,13 @@ async def search(req: SearchRequest, request: Request):
         ok, reason = await verify_work_email(email)
         if not ok:
             raise HTTPException(status_code=422, detail=reason)
+        # Proof-of-mailbox: the email must have completed OTP verification
+        # (valid 30 days). Only enforced when both Resend and the DB are
+        # configured — without them there is no code to have entered.
+        if settings.resend_api_key:
+            verified = await db.is_email_verified(email)
+            if verified is False:
+                raise HTTPException(status_code=403, detail="email_not_verified")
 
     ip         = _client_ip(request)
     device_id  = request.headers.get("x-device-id", "")
@@ -118,6 +125,81 @@ class ParseIcpRequest(BaseModel):
 
 class ValidateEmailRequest(BaseModel):
     email: str = ""
+
+
+class VerifyCodeRequest(BaseModel):
+    email: str = ""
+    code: str = ""
+
+
+def _code_hash(email: str, code: str) -> str:
+    import hashlib
+    return hashlib.sha256(f"{email.lower()}:{code.strip()}".encode()).hexdigest()
+
+
+def _send_otp_email(to: str, code: str) -> None:
+    import resend
+    resend.api_key = settings.resend_api_key
+    resend.Emails.send({
+        "from": f"ExpoToFunnel <{settings.resend_from_email}>",
+        "to": [to],
+        "subject": f"{code} is your ExpoToFunnel verification code",
+        "html": f"""
+        <div style="font-family:Helvetica,Arial,sans-serif;max-width:420px;margin:0 auto;padding:24px;">
+          <h2 style="color:#1E2B33;margin:0 0 6px;">Verify your work email</h2>
+          <p style="color:#4B5A63;font-size:14px;line-height:1.6;">
+            Enter this code on ExpoToFunnel to see your event ranking:</p>
+          <div style="background:#F4F1EA;border-radius:10px;padding:18px;text-align:center;
+                      font-size:32px;font-weight:800;letter-spacing:8px;color:#0E7C6B;">{code}</div>
+          <p style="color:#8A959C;font-size:12px;margin-top:14px;">
+            The code expires in 10 minutes. If you didn't request it, ignore this email.</p>
+        </div>""",
+    })
+
+
+@router.post("/send-verification")
+async def send_verification(req: ValidateEmailRequest, request: Request):
+    """Email a 6-digit OTP. This is the proof-of-mailbox step: a fake
+    address at a real company never receives the code, so it can never
+    pass. 3 sends/hour per email or IP."""
+    email = (req.email or "").strip().lower()
+    ok, reason = await verify_work_email(email)
+    if not ok:
+        raise HTTPException(status_code=422, detail=reason)
+    if not settings.resend_api_key:
+        return {"sent": False, "skip": True}   # email infra off → frontend skips OTP
+    ip = _client_ip(request)
+    if await db.sends_in_last_hour(email, ip) >= 3:
+        raise HTTPException(status_code=429,
+                            detail="Too many codes requested — try again in an hour.")
+    import secrets
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    stored = await db.create_verification(email, _code_hash(email, code), ip)
+    if not stored:
+        return {"sent": False, "skip": True}   # no DB → cannot enforce, skip
+    try:
+        _send_otp_email(email, code)
+    except Exception as e:
+        logger.error(f"OTP send failed: {e}")
+        raise HTTPException(status_code=502,
+                            detail="Couldn't send the code — please try again.")
+    return {"sent": True, "skip": False}
+
+
+@router.post("/verify-email-code")
+async def verify_email_code(req: VerifyCodeRequest):
+    email = (req.email or "").strip().lower()
+    code = (req.code or "").strip()
+    if not email or not code:
+        raise HTTPException(status_code=422, detail="Enter the 6-digit code from your email.")
+    status = await db.check_verification_code(email, _code_hash(email, code))
+    if status == "ok":
+        return {"verified": True}
+    if status == "wrong":
+        raise HTTPException(status_code=422, detail="That code isn't right — check the email and try again.")
+    if status == "expired":
+        raise HTTPException(status_code=422, detail="This code has expired — request a new one.")
+    return {"verified": True}   # storage unavailable → fail open
 
 
 @router.post("/validate-email")

@@ -159,6 +159,14 @@ export default function ICPForm({
   const [honeypot,      setHoneypot]      = useState('')
   const [captchaToken,  setCaptchaToken]  = useState('')
   const [consentChecked, setConsentChecked] = useState(false)
+
+  // ── Email OTP verification (proof the mailbox is real) ──────────
+  // otpStage: 'idle' | 'sent' | 'verified'. Reset when the email edits.
+  const [otpStage,     setOtpStage]     = useState('idle')
+  const [otpCode,      setOtpCode]      = useState('')
+  const [otpBusy,      setOtpBusy]      = useState(false)
+  const [otpError,     setOtpError]     = useState('')
+  const verifiedEmailRef = useRef('')
   const turnstileRef = useRef(null)
   // Turnstile sitekeys are public by design (they're embedded client-side
   // in every Turnstile integration) - not a secret, safe to hardcode. This
@@ -417,6 +425,33 @@ export default function ICPForm({
     return Object.keys(e).length === 0
   }
 
+  const handleVerifyOtp = async () => {
+    if (otpCode.length !== 6 || otpBusy) return
+    setOtpBusy(true)
+    try {
+      await api.verifyEmailCode(email.trim(), otpCode)
+      verifiedEmailRef.current = email.trim().toLowerCase()
+      setOtpStage('verified')
+      setOtpCode('')
+      toast.success('✅ Email verified — running your search…', { duration: 3500 })
+      handleSubmit()
+    } catch (err) {
+      setOtpError(err.message || 'Verification failed - try again.')
+    } finally {
+      setOtpBusy(false)
+    }
+  }
+
+  const handleResendOtp = async () => {
+    try {
+      await api.sendVerification(email.trim())
+      toast('📬 New code sent — check your inbox (and spam).', { duration: 5000 })
+      setOtpCode(''); setOtpError('')
+    } catch (err) {
+      toast.error(err.message || 'Could not resend - try again shortly.')
+    }
+  }
+
   const handleSubmit = async () => {
     if (!validate()) {
       // The submit button sits below a long form - without this, a failed
@@ -442,6 +477,34 @@ export default function ICPForm({
           ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       })
       return
+    }
+    // Proof-of-mailbox: send a 6-digit code and hold the submit until
+    // it's entered. A fake mailbox at a real company never receives the
+    // code, so it can never pass. Verified emails skip this (30 days,
+    // enforced server-side; verifiedEmailRef skips it within the session).
+    if (verifiedEmailRef.current !== email.trim().toLowerCase() && otpStage !== 'verified') {
+      try {
+        const sent = await api.sendVerification(email.trim())
+        if (sent.skip) {
+          // verification infra not configured — server won't enforce either
+          verifiedEmailRef.current = email.trim().toLowerCase()
+        } else {
+          setOtpStage('sent')
+          setOtpError('')
+          toast('📬 We emailed you a 6-digit code — enter it below to see your ranking.', { duration: 6000 })
+          requestAnimationFrame(() => {
+            document.getElementById('icp-otp-input')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            document.getElementById('icp-otp-input')?.focus()
+          })
+          return
+        }
+      } catch (err) {
+        // Already-verified emails come back 403-free; a 429 (too many
+        // sends) or 5xx shouldn't hard-block a legit user - the server
+        // still enforces verification on /api/search itself.
+        if (err.status === 429) { toast.error(err.message); return }
+        if (err.status === 422) { setErrors(p => ({ ...p, email: err.message })); toast.error(err.message); return }
+      }
     }
     const { industries, personas, extra_keywords, segments } = effectiveParse(buyer)
     const { date_from, date_to }   = getDefaultDateWindow()
@@ -915,7 +978,7 @@ export default function ICPForm({
             id="icp-email"
             type="email"
             value={email}
-            onChange={e => { setEmail(e.target.value); setErrors(p => ({ ...p, email: '' })) }}
+            onChange={e => { setEmail(e.target.value); setErrors(p => ({ ...p, email: '' })); if (otpStage !== 'idle') { setOtpStage('idle'); setOtpCode(''); setOtpError('') } }}
             onKeyDown={e => e.key === 'Enter' && handleSubmit()}
             placeholder="your@company.com"
             required
@@ -925,6 +988,39 @@ export default function ICPForm({
           />
         </div>
         {errors.email && <p className="icp-error">{errors.email}</p>}
+        {otpStage === 'sent' && (
+          <div style={{ marginTop: 10, padding: '14px 16px', background: 'rgba(14,124,107,0.06)',
+                        border: '1.5px solid rgba(14,124,107,0.35)', borderRadius: 10 }}>
+            <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: '#0E7C6B' }}>
+              📬 Enter the 6-digit code we just emailed to {email.trim()}
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                id="icp-otp-input"
+                inputMode="numeric"
+                maxLength={6}
+                value={otpCode}
+                onChange={e => { setOtpCode(e.target.value.replace(/\D/g, '')); setOtpError('') }}
+                onKeyDown={e => e.key === 'Enter' && handleVerifyOtp()}
+                placeholder="000000"
+                style={{ flex: 1, padding: '10px 14px', fontSize: 20, letterSpacing: 6, fontWeight: 700,
+                         border: otpError ? '1.5px solid #C93A2B' : '1.5px solid #D8D2C4', borderRadius: 8 }}
+                aria-label="6-digit verification code"
+              />
+              <button type="button" onClick={handleVerifyOtp} disabled={otpBusy || otpCode.length !== 6}
+                style={{ padding: '10px 18px', background: '#0E7C6B', color: '#fff', fontWeight: 700,
+                         border: 'none', borderRadius: 8, cursor: 'pointer', opacity: otpBusy || otpCode.length !== 6 ? 0.6 : 1 }}>
+                {otpBusy ? 'Checking…' : 'Verify'}
+              </button>
+            </div>
+            {otpError && <p className="icp-error" style={{ marginTop: 6 }}>{otpError}</p>}
+            <button type="button" onClick={handleResendOtp}
+              style={{ marginTop: 8, background: 'none', border: 'none', color: '#0E7C6B',
+                       fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+              Didn't get it? Resend code
+            </button>
+          </div>
+        )}
         <p className="icp-privacy">🔒 No spam. Your email is only used to send the event report.</p>
       </div>
 
