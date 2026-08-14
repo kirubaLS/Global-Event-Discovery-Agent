@@ -154,6 +154,19 @@ export const api = {
       body:   JSON.stringify({ email }),
     }).catch(() => ({ valid: true, reason: '' })),
 
+  // ── Email OTP verification (proof the mailbox is real) ───────────
+  sendVerification: (email) =>
+    request('/send-verification', {
+      method: 'POST',
+      body:   JSON.stringify({ email }),
+    }),
+
+  verifyEmailCode: (email, code) =>
+    request('/verify-email-code', {
+      method: 'POST',
+      body:   JSON.stringify({ email, code }),
+    }),
+
   // ── LLM ICP parse - universal buyer-text parsing ──────
   // Returns {source:'llm', industries, personas, extra_keywords, ...}
   // or {source:'rules'} when the caller should keep its local parse.
