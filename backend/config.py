@@ -45,6 +45,21 @@ class Settings(BaseSettings):
     search_cache_ttl_seconds: int = 86400   # identical ICP → reuse result 24h
     search_daily_limit: int = 3             # searches per device AND per IP per UTC day (0 = off)
 
+    # ── OTP delivery via plain SMTP (Google Workspace / Brevo / any) ─
+    # When SMTP_HOST is set, verification codes are sent over SMTP and
+    # Resend is left exclusively for the PDF report. Examples:
+    #   Google Workspace: smtp.gmail.com:587, user = your mailbox,
+    #                     pass = an App Password (myaccount.google.com
+    #                     → Security → 2-Step Verification → App passwords)
+    #   Brevo:            smtp-relay.brevo.com:587, user = login email,
+    #                     pass = the SMTP key from the Brevo dashboard
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_pass: str = ""
+    # From address for OTP mails; defaults to smtp_user when empty.
+    smtp_from: str = ""
+
     # ── Email report (Resend) ─────────────────────────────────────
     resend_api_key: str = ""
     resend_from_email: str = "kirubakaran.p@leadstrategus.com"
