@@ -405,7 +405,7 @@ export default function EventTable({ events, dealSizeCategory }) {
     { label: '#',              key: null,           center: true, width: 40 },
     { label: 'Event',          key: 'event_name'                            },
     { label: 'Date',           key: 'date'                                  },
-    { label: 'Location',       key: null                                    },
+    { label: 'Event Location', key: null                                    },
     { label: 'Industry',       key: null                                    },
     { label: 'Verdict',        key: 'fit_verdict',  center: true            },
     { label: 'Meetings Range', key: null,           center: true            },

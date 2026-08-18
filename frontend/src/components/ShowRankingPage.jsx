@@ -357,6 +357,15 @@ export default function ShowRankingPage({
             <p className="rk-banner-sub">
               Out of 17,000+ shows, here are the <strong>{top6.length}</strong> where your buyers concentrate.
             </p>
+            {(profile?.target_personas?.length || profile?.target_industries?.length || profile?.target_geographies?.length) && (
+              <p style={{ margin: '6px 0 0', fontSize: 11.5, color: 'var(--ink-faint)', fontFamily: 'var(--font-mono, monospace)' }}>
+                Search terms used:{' '}
+                <span style={{ color: 'var(--ink)', fontWeight: 600 }}>
+                  {[...(profile?.target_personas || []), ...(profile?.target_industries || []), ...(profile?.target_geographies || [])]
+                    .filter(Boolean).join(' + ')}
+                </span>
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -389,6 +398,11 @@ export default function ShowRankingPage({
           )}
         </div>
       </div>
+
+      {/* ── ICP travel note ──────────────────────────────────── */}
+      <p style={{ margin: '10px 24px 0', fontSize: 12, color: 'var(--ink-faint)', textAlign: 'center' }}>
+        ℹ️ Locations below are where each <strong>event is held</strong> — your ICP may travel outside their home geography to attend relevant events.
+      </p>
 
       {/* ── 2. UNIVERSE STATS ────────────────────────────────── */}
       <div className="rk-stats" ref={statsRef} aria-label="Universe statistics">
@@ -501,8 +515,9 @@ export default function ShowRankingPage({
                         {(() => {
                           const icpData = getICPCount(event)
                           if (!icpData) return (
-                            <span className="rk-meta-item" style={{ color: 'var(--ink-faint)', fontStyle: 'italic' }}>
-                              Attendee data pending
+                            <span className="rk-meta-item" style={{ color: 'var(--ink-faint)', fontStyle: 'italic' }}
+                              title="The organiser hasn't published attendee figures for this edition yet — ICP estimates appear once they do.">
+                              Estimated attendees: not yet published ⓘ
                             </span>
                           )
                           return (
@@ -569,6 +584,10 @@ export default function ShowRankingPage({
             )
           })}
         </div>
+
+        <p style={{ margin: '18px 0 0', textAlign: 'center', fontSize: 12.5, color: 'var(--ink-faint)' }}>
+          📄 For the detailed analysis and recommendations on every show, refer to your emailed PDF report.
+        </p>
 
         {/* EMAIL GATE */}
         {!unlocked && (
