@@ -50,9 +50,10 @@ async def search(req: SearchRequest, request: Request):
         if not ok:
             raise HTTPException(status_code=422, detail=reason)
         # Proof-of-mailbox: the email must have completed OTP verification
-        # (valid 30 days). Only enforced when both Resend and the DB are
-        # configured — without them there is no code to have entered.
-        if settings.resend_api_key:
+        # (valid 30 days). Only enforced when an OTP sender (SMTP or
+        # Resend) and the DB are configured — without them there is no
+        # code to have entered.
+        if otp_sender_configured():
             verified = await db.is_email_verified(email)
             if verified is False:
                 raise HTTPException(status_code=403, detail="email_not_verified")
@@ -137,14 +138,8 @@ def _code_hash(email: str, code: str) -> str:
     return hashlib.sha256(f"{email.lower()}:{code.strip()}".encode()).hexdigest()
 
 
-def _send_otp_email(to: str, code: str) -> None:
-    import resend
-    resend.api_key = settings.resend_api_key
-    resend.Emails.send({
-        "from": f"ExpoToFunnel <{settings.resend_from_email}>",
-        "to": [to],
-        "subject": f"{code} is your ExpoToFunnel verification code",
-        "html": f"""
+def _otp_email_html(code: str) -> str:
+    return f"""
         <div style="font-family:Helvetica,Arial,sans-serif;max-width:420px;margin:0 auto;padding:24px;">
           <h2 style="color:#1E2B33;margin:0 0 6px;">Verify your work email</h2>
           <p style="color:#4B5A63;font-size:14px;line-height:1.6;">
@@ -153,8 +148,67 @@ def _send_otp_email(to: str, code: str) -> None:
                       font-size:32px;font-weight:800;letter-spacing:8px;color:#0E7C6B;">{code}</div>
           <p style="color:#8A959C;font-size:12px;margin-top:14px;">
             The code expires in 10 minutes. If you didn't request it, ignore this email.</p>
-        </div>""",
+        </div>"""
+
+
+def otp_sender_configured() -> bool:
+    """OTP delivery is available via SMTP (preferred) or Resend fallback."""
+    return bool(settings.smtp_host or settings.resend_api_key)
+
+
+def _send_otp_smtp(to: str, code: str) -> None:
+    """Send the OTP over plain SMTP (Google Workspace app password,
+    Brevo SMTP key, or any other provider). Blocking — call via
+    asyncio.to_thread."""
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    sender = settings.smtp_from or settings.smtp_user
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"{code} is your ExpoToFunnel verification code"
+    msg["From"] = f"ExpoToFunnel <{sender}>"
+    msg["To"] = to
+    msg.attach(MIMEText(f"Your ExpoToFunnel verification code is {code}. "
+                        "It expires in 10 minutes.", "plain"))
+    msg.attach(MIMEText(_otp_email_html(code), "html"))
+
+    if int(settings.smtp_port) == 465:
+        with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=15) as s:
+            s.login(settings.smtp_user, settings.smtp_pass)
+            s.sendmail(sender, [to], msg.as_string())
+    else:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as s:
+            s.starttls()
+            s.login(settings.smtp_user, settings.smtp_pass)
+            s.sendmail(sender, [to], msg.as_string())
+
+
+def _send_otp_resend(to: str, code: str) -> None:
+    import resend
+    resend.api_key = settings.resend_api_key
+    resend.Emails.send({
+        "from": f"ExpoToFunnel <{settings.resend_from_email}>",
+        "to": [to],
+        "subject": f"{code} is your ExpoToFunnel verification code",
+        "html": _otp_email_html(code),
     })
+
+
+async def _send_otp_email(to: str, code: str) -> None:
+    """SMTP first (keeps Resend's quota exclusively for PDF reports);
+    Resend only as fallback when SMTP isn't configured or fails."""
+    import asyncio
+    if settings.smtp_host:
+        try:
+            await asyncio.to_thread(_send_otp_smtp, to, code)
+            return
+        except Exception as e:
+            logger.error(f"SMTP OTP send failed ({settings.smtp_host}): {e}")
+            if not settings.resend_api_key:
+                raise
+            logger.info("Falling back to Resend for this OTP")
+    await asyncio.to_thread(_send_otp_resend, to, code)
 
 
 @router.post("/send-verification")
@@ -166,7 +220,7 @@ async def send_verification(req: ValidateEmailRequest, request: Request):
     ok, reason = await verify_work_email(email)
     if not ok:
         raise HTTPException(status_code=422, detail=reason)
-    if not settings.resend_api_key:
+    if not otp_sender_configured():
         return {"sent": False, "skip": True}   # email infra off → frontend skips OTP
     ip = _client_ip(request)
     if await db.sends_in_last_hour(email, ip) >= 3:
@@ -178,7 +232,7 @@ async def send_verification(req: ValidateEmailRequest, request: Request):
     if not stored:
         return {"sent": False, "skip": True}   # no DB → cannot enforce, skip
     try:
-        _send_otp_email(email, code)
+        await _send_otp_email(email, code)
     except Exception as e:
         logger.error(f"OTP send failed: {e}")
         raise HTTPException(status_code=502,
