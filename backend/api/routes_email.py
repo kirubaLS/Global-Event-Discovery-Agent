@@ -104,28 +104,6 @@ def _build_html(request: EmailReportRequest) -> str:
         for ev in ev_list:
             color   = _verdict_color(ev.fit_verdict)
             bg      = _verdict_bg(ev.fit_verdict)
-            pkg_rows = "".join(f"""
-                <tr>
-                  <td style="padding:5px 10px;font-size:12px;color:#374151;">{name}</td>
-                  <td style="padding:5px 10px;font-size:11px;color:#6b7280;">{desc}</td>
-                  <td style="padding:5px 10px;font-size:12px;font-weight:700;color:#3b82f6;">{price}</td>
-                </tr>""" for name, price, desc in PACKAGES)
-
-            pricing_section = f"""
-                <div style="margin-top:12px;">
-                  <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">
-                    LeadStrategus Meeting Packages
-                  </div>
-                  <table style="border-collapse:collapse;width:100%;background:#f8faff;border-radius:6px;overflow:hidden;">
-                    <tr style="background:#eff6ff;">
-                      <th style="padding:5px 10px;font-size:10px;color:#6b7280;text-align:left;font-weight:700;">Package</th>
-                      <th style="padding:5px 10px;font-size:10px;color:#6b7280;text-align:left;font-weight:700;">Includes</th>
-                      <th style="padding:5px 10px;font-size:10px;color:#6b7280;text-align:left;font-weight:700;">Investment</th>
-                    </tr>
-                    {pkg_rows}
-                  </table>
-                </div>"""
-
             cards.append(f"""
             <div style="background:{bg};border:1.5px solid {color}30;border-radius:10px;padding:18px 20px;margin-bottom:16px;break-inside:avoid;">
               <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;">
@@ -147,9 +125,37 @@ def _build_html(request: EmailReportRequest) -> str:
                 {'<span>🎟 ' + ev.pricing + '</span>' if ev.pricing else ''}
                 {'<span>🔗 <a href="' + ev.event_link + '" style="color:#3b82f6;">' + ev.event_link[:50] + '…</a></span>' if ev.event_link else ''}
               </div>
-              {pricing_section}
             </div>""")
         return "".join(cards)
+
+    # One shared Meeting Packages section at the end of the report —
+    # the packages are identical for every event, so repeating the
+    # table per event card only bloated the PDF.
+    _pkg_rows = "".join(f"""
+        <tr>
+          <td style="padding:8px 12px;font-size:12px;color:#374151;font-weight:600;">{name}</td>
+          <td style="padding:8px 12px;font-size:11px;color:#6b7280;">{desc}</td>
+          <td style="padding:8px 12px;font-size:12px;font-weight:700;color:#3b82f6;">{price}</td>
+        </tr>""" for name, price, desc in PACKAGES)
+
+    packages_section = f"""
+  <!-- Meeting Packages (one section for the whole report) -->
+  <div style="margin-top:32px;break-inside:avoid;">
+    <div class="section-heading">LeadStrategus Meeting Packages</div>
+    <p style="font-size:12px;color:#6b7280;line-height:1.6;margin-bottom:10px;">
+      These packages apply to any event in this report — we research your target
+      accounts, reach out pre-show, and fill your calendar with confirmed meetings
+      before you fly out.
+    </p>
+    <table style="border-collapse:collapse;width:100%;background:#f8faff;border-radius:8px;overflow:hidden;">
+      <tr style="background:#eff6ff;">
+        <th style="padding:8px 12px;font-size:10px;color:#6b7280;text-align:left;font-weight:700;">Package</th>
+        <th style="padding:8px 12px;font-size:10px;color:#6b7280;text-align:left;font-weight:700;">Includes</th>
+        <th style="padding:8px 12px;font-size:10px;color:#6b7280;text-align:left;font-weight:700;">Investment</th>
+      </tr>
+      {_pkg_rows}
+    </table>
+  </div>"""
 
     industries_str  = ", ".join(p.target_industries[:5]) if p.target_industries else "-"
     personas_str    = ", ".join(p.target_personas[:5])   if p.target_personas   else "-"
@@ -297,6 +303,8 @@ def _build_html(request: EmailReportRequest) -> str:
     </div>
     {event_cards(con_events)}
   </div>
+
+  {packages_section}
 
   <!-- Disclaimer -->
   <div class="disclaimer">
