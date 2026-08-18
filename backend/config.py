@@ -45,7 +45,17 @@ class Settings(BaseSettings):
     search_cache_ttl_seconds: int = 86400   # identical ICP → reuse result 24h
     search_daily_limit: int = 3             # searches per device AND per IP per UTC day (0 = off)
 
+    # ── OTP delivery via Brevo HTTP API (works on Render free) ──────
+    # Render's free tier blocks outbound SMTP ports (25/465/587) —
+    # "[Errno 101] Network is unreachable" — so the HTTP API (port 443)
+    # is the way to send OTPs there. brevo.com → SMTP & API → API keys.
+    brevo_api_key: str = ""
+    # Verified sender in Brevo (Senders & IPs → add + verify).
+    brevo_from_email: str = ""
+
     # ── OTP delivery via plain SMTP (Google Workspace / Brevo / any) ─
+    # NOTE: does NOT work on Render's free tier (SMTP ports blocked) —
+    # use the Brevo API above there; SMTP works on paid plans/elsewhere.
     # When SMTP_HOST is set, verification codes are sent over SMTP and
     # Resend is left exclusively for the PDF report. Examples:
     #   Google Workspace: smtp.gmail.com:587, user = your mailbox,

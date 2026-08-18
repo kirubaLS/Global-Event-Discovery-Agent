@@ -152,8 +152,28 @@ def _otp_email_html(code: str) -> str:
 
 
 def otp_sender_configured() -> bool:
-    """OTP delivery is available via SMTP (preferred) or Resend fallback."""
-    return bool(settings.smtp_host or settings.resend_api_key)
+    """OTP delivery order: Brevo HTTP API → SMTP → Resend."""
+    return bool(settings.brevo_api_key or settings.smtp_host or settings.resend_api_key)
+
+
+async def _send_otp_brevo(to: str, code: str) -> None:
+    """Brevo transactional-email HTTP API — port 443, so it works on
+    Render's free tier where outbound SMTP ports are blocked."""
+    import httpx
+    sender = settings.brevo_from_email or settings.smtp_from or settings.resend_from_email
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.post(
+            "https://api.brevo.com/v3/smtp/email",
+            headers={"api-key": settings.brevo_api_key,
+                     "content-type": "application/json"},
+            json={
+                "sender": {"name": "ExpoToFunnel", "email": sender},
+                "to": [{"email": to}],
+                "subject": f"{code} is your ExpoToFunnel verification code",
+                "htmlContent": _otp_email_html(code),
+            },
+        )
+        r.raise_for_status()
 
 
 def _send_otp_smtp(to: str, code: str) -> None:
@@ -196,9 +216,19 @@ def _send_otp_resend(to: str, code: str) -> None:
 
 
 async def _send_otp_email(to: str, code: str) -> None:
-    """SMTP first (keeps Resend's quota exclusively for PDF reports);
-    Resend only as fallback when SMTP isn't configured or fails."""
+    """Delivery chain: Brevo HTTP API → SMTP → Resend. The first
+    configured sender that succeeds wins; each failure logs and falls
+    through, keeping Resend's quota for PDF reports whenever possible."""
     import asyncio
+    if settings.brevo_api_key:
+        try:
+            await _send_otp_brevo(to, code)
+            return
+        except Exception as e:
+            logger.error(f"Brevo OTP send failed: {e}")
+            if not (settings.smtp_host or settings.resend_api_key):
+                raise
+            logger.info("Falling back past Brevo for this OTP")
     if settings.smtp_host:
         try:
             await asyncio.to_thread(_send_otp_smtp, to, code)

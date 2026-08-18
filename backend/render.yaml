@@ -42,7 +42,13 @@ services:
       - key: SEARCH_CACHE_TTL_SECONDS
         value: "86400"
 
-      # ── OTP emails via SMTP (Google Workspace / Brevo — free) ─────
+      # ── OTP emails via Brevo HTTP API (Render free blocks SMTP!) ──
+      - key: BREVO_API_KEY
+        sync: false   # brevo.com → SMTP & API → API keys (v3)
+      - key: BREVO_FROM_EMAIL
+        sync: false   # a sender verified in Brevo, e.g. verify@expotofunnel.com
+
+      # ── OTP via SMTP (paid hosts only — Render free blocks the ports)
       - key: SMTP_HOST
         sync: false   # e.g. smtp.gmail.com or smtp-relay.brevo.com
       - key: SMTP_PORT
