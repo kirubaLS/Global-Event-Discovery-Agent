@@ -150,6 +150,7 @@ export default function ICPForm({
   const [companyName,    setCompanyName]    = useState('')
   const [diffScore,      setDiffScore]      = useState(5)      // differentiator 1 - 10
   const [clientRange,    setClientRange]    = useState('')     // client count range
+  const [refRange,       setRefRange]       = useState('')     // publicly referenceable clients
   const [clientNames,   setClientNames]   = useState([])   // array of company name strings
   const [clientNameInput, setClientNameInput] = useState('')
 
@@ -381,6 +382,7 @@ export default function ICPForm({
         extra_keywords:         extra_keywords || [],
         differentiator_score:   diffScore,
         client_count_range:     clientRange || '11-50',
+        public_reference_range: refRange || '',
         client_names:           clientNameInput.trim() && !clientNames.includes(clientNameInput.trim())
           ? [...clientNames, clientNameInput.trim()]
           : clientNames,
@@ -539,6 +541,7 @@ export default function ICPForm({
       extra_keywords:       extra_keywords || [],
       differentiator_score: diffScore,
       client_count_range:   clientRange || "11-50",
+      public_reference_range: refRange || '',
       client_names:         finalClientNames,
       email,
       // Bot protection + consent — read by App.jsx::onSearch and sent as
@@ -900,6 +903,37 @@ export default function ICPForm({
           ))}
         </div>
         {errors.client && <p className="icp-error">{errors.client}</p>}
+      </fieldset>
+
+      {/* Field 6b: Publicly referenceable clients (drives outreach effort) */}
+      <fieldset className="icp-field-group">
+        <legend className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
+          How many client names can you publicly reference?
+        </legend>
+        <p className="icp-hint" id="icp-refs-help">
+          Logos/names we may use in outreach ("we work with X"). More usable references = less outreach effort.
+        </p>
+        <div className="icp-client-grid" role="radiogroup" aria-label="Publicly referenceable clients" aria-describedby="icp-refs-help">
+          {[
+            { v:'0',     l:'0',        s:'None public yet - cold-start outreach' },
+            { v:'1-5',   l:'1 - 5',    s:'A few logos - solid starting proof'    },
+            { v:'6-10',  l:'6 - 10',   s:'Good proof base'                       },
+            { v:'11-20', l:'11 - 20',  s:'Strong logo wall'                      },
+            { v:'20+',   l:'20+',      s:'Outreach nearly writes itself'         },
+          ].map(opt => (
+            <button
+              key={opt.v}
+              role="radio"
+              aria-checked={refRange === opt.v}
+              type="button"
+              className={`icp-client-option ${refRange === opt.v ? 'selected' : ''}`}
+              onClick={() => setRefRange(opt.v)}
+            >
+              <span className="icp-client-count">{opt.l}</span>
+              <span className="icp-client-sub">{opt.s}</span>
+            </button>
+          ))}
+        </div>
       </fieldset>
 
       {/* Client names - optional tag input */}
