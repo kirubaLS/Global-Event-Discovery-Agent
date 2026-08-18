@@ -355,7 +355,11 @@ export default function ShowRankingPage({
               <div className="rk-banner-label">{bannerParts.join('  ·  ')}</div>
             )}
             <p className="rk-banner-sub">
-              Out of 17,000+ shows, here are the <strong>{top6.length}</strong> where your buyers concentrate.
+              {totalConsidering > top6.length ? (
+                <>We found <strong>{totalConsidering}</strong> relevant events for your ICP — here are the <strong>top {top6.length}</strong> where your buyers concentrate.</>
+              ) : (
+                <>Out of 17,000+ shows, here are the <strong>{top6.length}</strong> where your buyers concentrate.</>
+              )}
             </p>
             {(profile?.target_personas?.length || profile?.target_industries?.length || profile?.target_geographies?.length) && (
               <p style={{ margin: '6px 0 0', fontSize: 11.5, color: 'var(--ink-faint)', fontFamily: 'var(--font-mono, monospace)' }}>
@@ -431,12 +435,8 @@ export default function ShowRankingPage({
             <div className="rk-stat-num">
               <Counter target={totalConsidering} triggered={statsVisible} />
             </div>
-            <div className="rk-stat-label">shows worth considering</div>
-            <div className="rk-stat-method">
-                {(_apiStats.total_indexed || 0) > 0
-                  ? `from our ${(_apiStats.total_indexed).toLocaleString()}+ indexed shows`
-                  : 'from our full show index'}
-              </div>
+            <div className="rk-stat-label">relevant events found for your ICP</div>
+            <div className="rk-stat-method">top {top6.length} recommended below</div>
           </div>
           <div className="rk-stat-divider" aria-hidden="true" />
           <div className="rk-stat-card">
@@ -650,6 +650,21 @@ export default function ShowRankingPage({
           <p className="rk-pricing-sub">
             Shift the frame: not "what does this cost?" but "what does one qualified meeting generate in pipeline?"
           </p>
+          {(() => {
+            const REF_NOTES = {
+              '0':     { label: 'no public client references yet',  note: 'outreach starts cold, so allow extra ramp-up time — packages reflect standard effort' },
+              '1-5':   { label: '1–5 public client references',     note: 'solid starting proof for outreach — standard effort applies' },
+              '6-10':  { label: '6–10 public client references',    note: 'a good proof base cuts outreach effort — mention it when you contact us for reduced pricing' },
+              '11-20': { label: '11–20 public client references',   note: 'a strong logo wall meaningfully cuts outreach effort — mention it for reduced pricing' },
+              '20+':   { label: '20+ public client references',     note: 'outreach nearly writes itself — mention it for our best reference pricing' },
+            }
+            const r = REF_NOTES[profile?.public_reference_range]
+            return r ? (
+              <p className="rk-pricing-sub" style={{ fontSize: 12.5, color: 'var(--c-find)', fontWeight: 600 }}>
+                Your profile: {r.label} — {r.note}.
+              </p>
+            ) : null
+          })()}
           <p className="rk-pricing-sub" style={{ fontSize: 12, opacity: 0.75 }}>
             All prices are in USD, plus local taxes as applicable. Paid packages are governed by the laws of India.
           </p>

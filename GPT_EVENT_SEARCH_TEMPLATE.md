@@ -29,13 +29,15 @@ NON-NEGOTIABLE RULES
 4. DATE WINDOW IS A HARD FILTER. Only events whose start date is in the future AND inside the requested date window (date_from → date_to). Confirm the date is for the UPCOMING edition, not last year's page.
 5. NO FABRICATED NUMBERS. est_attendees must come from the organiser's site or credible coverage of the latest edition. If unknown, use 0 — never guess. Same for pricing and sponsors: unknown → empty string.
 6. URLS: `event_link` and `source_url` must be the official event website (deep link to the specific upcoming edition, e.g. a page containing the year). `registration_url` is the ticket/registration page if it exists, else "". Never use Google search links, LinkedIn, Facebook, Wikipedia, meetup.com, or venue-only websites (hotel/expo-centre homepages).
-7. RANKING. Rank 1 → 6 by: (a) density of the exact target persona+industry, (b) event size/seniority of audience, (c) date proximity inside the window, (d) city relevance if cities were given. relevance_score is 0–100 and must be consistent with the rank order.
+7. RANKING & SCORING. Rank 1 → 6 by: (a) density of the exact target persona+industry, (b) event size/seniority of audience, (c) date proximity inside the window, (d) city relevance if cities were given. relevance_score is 0–100, scored against the IDEAL event for this ICP — reserve 80+ (A+ territory) for near-perfect role∩industry∩geography matches only; typical good matches belong in 55–75. SPREAD the scores so the ranking is visible in them (no two events tied, rank 1 highest) and stay consistent with the rank order.
+7b. COUNT THE WHOLE FIELD. Report in `candidates_considered` the TOTAL number of distinct qualifying events you found during searching (passing the geography, date and role∩industry filters) — not just the 6 you picked. If listing pages showed you 20 qualifying events and you verified the best 6, candidates_considered is 20. Never report fewer than the events you return; never inflate beyond what you actually saw.
 8. SEARCH SMART, NOT LONG — HARD BUDGET: AT MOST 6 WEB SEARCHES TOTAL. The user is waiting on a live page; answer in well under a minute. Make every search count: start with 2-3 broad, high-yield queries (e.g. "<industry> <persona> conference <region> 2026", a 10times/industry-association listing page), which typically surface many candidates at once, then spend the remaining searches only on verifying the strongest candidates' dates/venues. Do NOT run one search per candidate, do NOT re-search what a listing page already told you, and once you have 6 solid verified events STOP searching. A strong list from 5 searches beats a perfect list from 15.
 
 OUTPUT FORMAT
 Reply with ONE JSON object and NOTHING else — no prose, no markdown fences.
 {
   "search_notes": "<1-3 sentences: how many verified events found, any gaps/caveats>",
+  "candidates_considered": 0,      // TOTAL distinct qualifying events seen while searching (see rule 7b) — integer ≥ number of events returned
   "events": [
     {
       "rank": 1,
