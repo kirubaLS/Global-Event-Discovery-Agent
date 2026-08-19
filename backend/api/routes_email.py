@@ -46,6 +46,7 @@ class EventForReport(BaseModel):
 
 class ProfileSummary(BaseModel):
     company_name:        str = ""
+    buyer_description:   str = ""
     target_industries:   List[str] = []
     target_personas:     List[str] = []
     target_geographies:  List[str] = []
@@ -157,8 +158,23 @@ def _build_html(request: EmailReportRequest) -> str:
     </table>
   </div>"""
 
-    industries_str  = ", ".join(p.target_industries[:5]) if p.target_industries else "-"
-    personas_str    = ", ".join(p.target_personas[:5])   if p.target_personas   else "-"
+    def _agg(field: str) -> list:
+        seen = []
+        for ev in events:
+            for part in (getattr(ev, field, "") or "").split(","):
+                part = part.strip()
+                if part and part not in seen:
+                    seen.append(part)
+        return seen
+
+    # target_industries/personas can be empty when the async ICP parse
+    # hadn't populated them at submit time — fall back to what GPT
+    # actually tagged on the events, then to the raw buyer description,
+    # so the report never shows a bare "-" when we do know the target.
+    _industries = p.target_industries or _agg("industry")
+    _personas   = p.target_personas   or _agg("buyer_persona")
+    industries_str  = ", ".join(_industries[:5]) if _industries else (p.buyer_description or "-")
+    personas_str    = ", ".join(_personas[:5])   if _personas   else (p.buyer_description or "-")
     geographies_str = ", ".join(p.target_geographies)    if p.target_geographies else "-"
 
     return f"""<!DOCTYPE html>

@@ -450,6 +450,7 @@ export default function App() {
         })),
         profile: {
           company_name: profile?.company_name || '',
+          buyer_description: profile?.buyer_description || '',
           target_industries: profile?.target_industries || [], target_personas: profile?.target_personas || [],
           target_geographies: profile?.target_geographies || [], date_from: profile?.date_from || null, date_to: profile?.date_to || null,
         },
@@ -544,6 +545,7 @@ export default function App() {
           events={allDisplay}
           profile={{
             company_name: lastProfile?.company_name || '',
+            buyer_description: lastProfile?.buyer_description || '',
             target_industries: lastProfile?.target_industries || [],
             target_personas: lastProfile?.target_personas || [],
             target_geographies: lastProfile?.target_geographies || [],
