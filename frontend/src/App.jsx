@@ -266,7 +266,13 @@ export default function App() {
   // resolves. Checked before anything else so a maintenance window shows
   // one clean screen instead of the app half-loading then erroring on
   // every 503'd call.
-  const [maintenance,      setMaintenance]       = useState(null)
+  // Build-time maintenance kill switch (VITE_MAINTENANCE_MODE, inlined by
+  // Vite at build time — see render.yaml). When "true" the site shows the
+  // maintenance screen with no dependency on the backend being reachable.
+  const buildTimeMaintenance = import.meta.env.VITE_MAINTENANCE_MODE === 'true'
+  const [maintenance,      setMaintenance]       = useState(
+    buildTimeMaintenance ? { on: true, message: '' } : null
+  )
 
   useEffect(() => {
     if (buildTimeMaintenance) return   // already showing maintenance, no need to also hit the API
