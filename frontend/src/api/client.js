@@ -1,7 +1,7 @@
 const BASE = import.meta.env.VITE_API_URL || ''
 
 // Attach the HTTP status (when we have one) to the thrown Error so callers
-// can tell "the server is down / errored" (5xx, or no status at all — a
+// can tell "the server is down / errored" (5xx, or no status at all - a
 // network failure) apart from "the user needs to fix their input" (4xx),
 // without re-parsing the message string. See ErrorPage.jsx / App.jsx.
 function apiError(message, status) {
@@ -12,7 +12,7 @@ function apiError(message, status) {
 
 // Random id persisted per-browser, sent as X-Device-Id so the backend's
 // daily search limit (api/rate_limit.py) can key on "one person" instead
-// of raw IP — IP alone false-positives for anyone sharing a network
+// of raw IP - IP alone false-positives for anyone sharing a network
 // (home WiFi, office, mobile carrier CGNAT) with someone who already
 // used their quota.
 function getDeviceId() {
@@ -24,12 +24,12 @@ function getDeviceId() {
     }
     return id
   } catch {
-    return ''   // localStorage unavailable (private mode, etc.) — server falls back to IP-only
+    return ''   // localStorage unavailable (private mode, etc.) - server falls back to IP-only
   }
 }
 
 // Same persistence pattern as device_id, but this is the key the
-// analytics_* tables (models/analytics.py) actually join on — without
+// analytics_* tables (models/analytics.py) actually join on - without
 // it, analytics_icp_submissions/analytics_events have no way to link
 // back to an analytics_sessions row (that's the "no common key between
 // tables" gap). Sent as X-Session-Id on every request so every backend
@@ -63,7 +63,7 @@ async function request(path, options = {}) {
     })
   } catch (networkErr) {
     // fetch() itself rejects on DNS failure, connection refused, CORS
-    // block, offline, etc. — no status code available, server unreachable.
+    // block, offline, etc. - no status code available, server unreachable.
     throw apiError(networkErr.message || 'Network request failed', undefined)
   }
   if (!res.ok) {
@@ -76,7 +76,7 @@ async function request(path, options = {}) {
 export const api = {
   // ── Event search ─────────────────────────────────────
   // POST /api/search is now async: it either returns
-  // {status:'queued', job_id} (search queue is active — REDIS_URL is
+  // {status:'queued', job_id} (search queue is active - REDIS_URL is
   // set on the backend) or {status:'done', job_id:null, result}
   // (no queue configured, ran inline same as before this existed).
   // Also throws a 429 (via request()'s apiError) if this browser
@@ -97,12 +97,12 @@ export const api = {
     while (Date.now() - start < timeoutMs) {
       const s = await request(`/search/status/${jobId}`)
       if (s.status === 'done') return s.result
-      // A failed *job* is not a network/server-down failure — the HTTP
+      // A failed *job* is not a network/server-down failure - the HTTP
       // request to check status succeeded fine, the search pipeline
       // itself errored (e.g. a backend bug, OpenAI outage). Give it a
       // 2xx-ish status so App.jsx's classifyError() treats it as a
       // normal toast-worthy failure, not the fatal "can't reach the
-      // server" full-page error — those are different problems and
+      // server" full-page error - those are different problems and
       // deserve different messaging. See apiError() above for the
       // status convention this piggybacks on.
       if (s.status === 'error') throw apiError(s.error || 'Search failed - please try again', 200)
@@ -190,7 +190,7 @@ export const api = {
 
   // ── Analytics: session lifecycle + generic event tracking ─────
   // session_id is auto-attached as X-Session-Id on every request
-  // (see getSessionId() above) — these calls create the row that
+  // (see getSessionId() above) - these calls create the row that
   // header actually points at, and keep it fresh.
   analyticsSessionStart: (referrer = '', landingPage = '') =>
     request('/analytics/session/start', {

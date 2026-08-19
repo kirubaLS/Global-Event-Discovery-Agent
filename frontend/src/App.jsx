@@ -259,7 +259,7 @@ export default function App() {
   const [suggestedGeos,    setSuggestedGeos]    = useState([])
   const [deepDiveEvent,    setDeepDiveEvent]    = useState(null)
   const [deepDiveRank,     setDeepDiveRank]     = useState(null)
-  const [fatalError,       setFatalError]       = useState(null)   // { kind: 'network'|'server', detail } — see ErrorPage.jsx
+  const [fatalError,       setFatalError]       = useState(null)   // { kind: 'network'|'server', detail } - see ErrorPage.jsx
   // Site-wide maintenance kill switch (backend settings.MAINTENANCE_MODE,
   // see main.py's middleware) - null while unchecked (nothing renders
   // differently yet), then { on, message } once the very first check
@@ -271,7 +271,7 @@ export default function App() {
   useEffect(() => {
     api.getMaintenanceStatus()
       .then(s => setMaintenance({ on: !!s.maintenance, message: s.message || '' }))
-      .catch(() => setMaintenance({ on: false, message: '' }))   // backend unreachable — fall through to the normal ErrorPage flow instead of a false "under maintenance"
+      .catch(() => setMaintenance({ on: false, message: '' }))   // backend unreachable - fall through to the normal ErrorPage flow instead of a false "under maintenance"
   }, [])
 
   useEffect(() => { api.getStats().then(setStats).catch(() => {}) }, [])
@@ -287,7 +287,7 @@ export default function App() {
 
   // ── Analytics session lifecycle ────────────────────────────────
   // Registers the analytics_sessions row this browser's X-Session-Id
-  // header (see api/client.js) points at — without this call the
+  // header (see api/client.js) points at - without this call the
   // header still gets sent everywhere, but every analytics_* write
   // that references it is an orphaned foreign key with nothing to
   // join to. Heartbeat keeps last_seen_at/total_time_spent_seconds
@@ -411,7 +411,7 @@ export default function App() {
       if (kind) {
         // Defense in depth: err.message is whatever the backend put in
         // its error response. It shouldn't ever contain internals (SQL,
-        // stack traces, secrets) — but only show it at all in dev, so a
+        // stack traces, secrets) - but only show it at all in dev, so a
         // future backend regression can't put raw exception text in
         // front of a real user's screen.
         setFatalError({ kind, detail: import.meta.env.DEV ? err.message : '' })
@@ -470,7 +470,7 @@ export default function App() {
 
   const allDisplay = results.filter(e => e.fit_verdict !== 'SKIP')
 
-  /* ── Site-wide maintenance window — takes priority over every other
+  /* ── Site-wide maintenance window - takes priority over every other
      screen, including static pages, so the whole site really is "down"
      from one backend env var flip (settings.MAINTENANCE_MODE). */
   if (maintenance?.on) {

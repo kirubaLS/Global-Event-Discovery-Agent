@@ -22,7 +22,7 @@ const PACKAGES = {
   starter: {
     key: 'starter', tag: 'Most popular', name: 'Starter pack',
     priceLabel: 'From $4,000', price: 4000, outcome: '10 qualified meetings',
-    features: ['Everything in Discover', 'Shows ranked 7–23', 'Pre-show ICP outreach', '10 confirmed meetings', 'Post-event follow-up'],
+    features: ['Everything in Discover', 'Shows ranked 7-23', 'Pre-show ICP outreach', '10 confirmed meetings', 'Post-event follow-up'],
     cta: 'Get started →',
   },
   growth: {
@@ -42,8 +42,8 @@ const PACKAGE_ORDER = ['discover', 'starter', 'growth', 'takeover']
 
 const DEAL_LABELS = {
   low:        'Low (<$10K ACV)',
-  medium:     'Medium ($10K–$25K ACV)',
-  high:       'High ($25K–$75K ACV)',
+  medium:     'Medium ($10K-$25K ACV)',
+  high:       'High ($25K-$75K ACV)',
   enterprise: 'Enterprise (>$75K ACV)',
 }
 
@@ -72,7 +72,7 @@ function getEventTier(attendees) {
    WHAT'S INCLUDED
    ───────────────────────────────────────────────────────── */
 const INCLUSIONS = [
-  { icon: Users,         title: 'Pre-show ICP outreach',          desc: 'We research and contact your exact target accounts 3–4 weeks before the event, generating confirmed interest before you step on site.' },
+  { icon: Users,         title: 'Pre-show ICP outreach',          desc: 'We research and contact your exact target accounts 3-4 weeks before the event, generating confirmed interest before you step on site.' },
   { icon: CalendarCheck, title: 'Confirmed meeting scheduling',    desc: 'Every meeting is booked, confirmed, and placed on your calendar. No cold walks - only qualified decision-makers.' },
   { icon: ClipboardList, title: 'Pre-meeting briefs',              desc: 'You receive a detailed profile of each attendee - company, role, pain points, conversation starters - before you walk in.' },
   { icon: Headphones,    title: 'Meeting-day coordination',        desc: 'A dedicated LeadStrategus rep manages logistics remotely on the day: keeps meetings on track, handles no-shows, reschedules when needed.' },

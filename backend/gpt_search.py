@@ -1,12 +1,12 @@
 """
-backend/gpt_search.py — ICP → top-6 events via ChatGPT real web search.
+backend/gpt_search.py - ICP → top-6 events via ChatGPT real web search.
 
 This replaces the entire old pipeline (DB, scrapers, ingestion APIs,
 embeddings, scorers). One call: the raw ICP form payload goes into a
 strict prompt, ChatGPT's web_search tool finds real upcoming events,
 and the reply comes back as JSON already shaped for the frontend
 (ShowRankingPage / ShowDeepDivePage / EmailReportModal all read these
-exact field names — do not rename them).
+exact field names - do not rename them).
 
 Verification policy baked into the prompt:
   • events must exist on the live web (organiser page found via search)
@@ -14,7 +14,7 @@ Verification policy baked into the prompt:
   • persona must plausibly attend (CEO-level content, not a nurses' CME)
   • dates must fall inside the requested window and be in the future
   • source_url must be the official event/registration page
-  • unknown numbers → 0 / "" — never invented
+  • unknown numbers → 0 / "" - never invented
 """
 import json
 import re
@@ -28,7 +28,7 @@ from config import get_settings
 settings = get_settings()
 
 # ═══════════════════════════════════════════════════════════════════
-# GPT TEMPLATE — system prompt
+# GPT TEMPLATE - system prompt
 # (Kept in sync with GPT_EVENT_SEARCH_TEMPLATE.md at the repo root,
 #  which is the copy-paste version for manual ChatGPT use.)
 # ═══════════════════════════════════════════════════════════════════
@@ -37,26 +37,26 @@ SYSTEM_PROMPT = """You are a B2B event-intelligence researcher for LeadStrategus
 
 NON-NEGOTIABLE RULES
 1. VERIFIED EVENTS ONLY. Every event must have a live official website or registration page that you actually found via web search. Never invent an event, an edition, a date, a venue, or a URL. If you cannot verify it, it does not go in the list.
-2. GEOGRAPHY IS A HARD FILTER. If the ICP says India, return ONLY events physically held in India. Never substitute Dubai/Singapore/US events "because they are bigger". If fewer than 6 verified events exist in the geography + date window, return fewer than 6 and explain in `search_notes` — a short honest list beats a padded one.
-2b. IMPLIED GEOGRAPHY — THINK ABOUT THE VOCABULARY. When the geography is "Global" (or unspecified), the buyer description itself often reveals where the buyers really are: reason about every term in it. Region-bound regulatory/institutional/industry vocabulary implies a home market — whatever the term and wherever it points (a lender type, a regulator, a compliance regime, a company form, an industry body, a local market label). Infer the implied region(s) yourself from what the words actually mean; do not rely on a fixed list. When you detect one: at least 2-3 of the 6 events must be held in that implied region (if verified events exist there — search that region explicitly), the rest may be global flagships, and `search_notes` must state the inference you made. Truly region-neutral descriptions get a genuine global spread. An EXPLICIT geography always overrides this — rule 2 stays absolute.
-3. ROLE + INDUSTRY IS ONE JOINT HARD FILTER — never satisfy one without the other. "CIOs at NBFCs" means events where CIOs/technology leaders OF NBFCs and lending institutions concentrate — an NBFC/lending-industry event with a CIO-level audience. A generic CIO event with no NBFC/financial focus FAILS the filter, and an NBFC industry event that CIOs don't attend FAILS the filter. Rank events at the exact role∩industry intersection above broader ones, and say in verdict_notes how each event satisfies BOTH. Then, for the role side, ask for each candidate: "would THIS specific persona genuinely attend this event?" Match the event's audience to the role's level and function, whatever it is:
-   • C-level / founders (CEO, CFO, CMO, founder) → leadership summits, flagship industry expos, investor and innovation conferences — not academic workshops or technician training days.
+2. GEOGRAPHY IS A HARD FILTER. If the ICP says India, return ONLY events physically held in India. Never substitute Dubai/Singapore/US events "because they are bigger". If fewer than 6 verified events exist in the geography + date window, return fewer than 6 and explain in `search_notes` - a short honest list beats a padded one.
+2b. IMPLIED GEOGRAPHY - THINK ABOUT THE VOCABULARY. When the geography is "Global" (or unspecified), the buyer description itself often reveals where the buyers really are: reason about every term in it. Region-bound regulatory/institutional/industry vocabulary implies a home market - whatever the term and wherever it points (a lender type, a regulator, a compliance regime, a company form, an industry body, a local market label). Infer the implied region(s) yourself from what the words actually mean; do not rely on a fixed list. When you detect one: at least 2-3 of the 6 events must be held in that implied region (if verified events exist there - search that region explicitly), the rest may be global flagships, and `search_notes` must state the inference you made. Truly region-neutral descriptions get a genuine global spread. An EXPLICIT geography always overrides this - rule 2 stays absolute.
+3. ROLE + INDUSTRY IS ONE JOINT HARD FILTER - never satisfy one without the other. "CIOs at NBFCs" means events where CIOs/technology leaders OF NBFCs and lending institutions concentrate - an NBFC/lending-industry event with a CIO-level audience. A generic CIO event with no NBFC/financial focus FAILS the filter, and an NBFC industry event that CIOs don't attend FAILS the filter. Rank events at the exact role∩industry intersection above broader ones, and say in verdict_notes how each event satisfies BOTH. Then, for the role side, ask for each candidate: "would THIS specific persona genuinely attend this event?" Match the event's audience to the role's level and function, whatever it is:
+   • C-level / founders (CEO, CFO, CMO, founder) → leadership summits, flagship industry expos, investor and innovation conferences - not academic workshops or technician training days.
    • Technical leaders (CISO, CTO, VP Engineering, Head of Data) → the field's flagship technical/security/tech conferences and practitioner summits where leaders speak and evaluate vendors.
    • Functional heads (HR, procurement, supply chain, marketing, finance, operations directors/managers) → that function's dedicated conferences and the industry's major trade shows where the function is a named audience track.
    • Practitioners / specialists (developers, doctors, engineers, designers, analysts) → hands-on practitioner conferences, professional-association congresses, certification/skills events.
-   The SAME event can be right for one role and wrong for another — judge against the stated role, not a generic "decision-maker". If the ICP mixes roles, prioritise events attracting several of them. Drop events the stated persona would not personally attend.
+   The SAME event can be right for one role and wrong for another - judge against the stated role, not a generic "decision-maker". If the ICP mixes roles, prioritise events attracting several of them. Drop events the stated persona would not personally attend.
 4. DATE WINDOW IS A HARD FILTER. Only events whose start date is in the future AND inside the requested date window (date_from → date_to). Confirm the date is for the UPCOMING edition, not last year's page.
-5. NO FABRICATED NUMBERS. est_attendees must come from the organiser's site or credible coverage of the latest edition. If unknown, use 0 — never guess. Same for pricing and sponsors: unknown → empty string.
+5. NO FABRICATED NUMBERS. est_attendees must come from the organiser's site or credible coverage of the latest edition. If unknown, use 0 - never guess. Same for pricing and sponsors: unknown → empty string.
 6. URLS: `event_link` and `source_url` must be the official event website (deep link to the specific upcoming edition, e.g. a page containing the year). `registration_url` is the ticket/registration page if it exists, else "". Never use Google search links, LinkedIn, Facebook, Wikipedia, meetup.com, or venue-only websites (hotel/expo-centre homepages).
-7. RANKING & SCORING. Rank 1 → 6 by: (a) density of the exact target persona+industry, (b) event size/seniority of audience, (c) date proximity inside the window, (d) city relevance if cities were given. relevance_score is 0–100, scored against the IDEAL event for this ICP — reserve 80+ (A+ territory) for near-perfect role∩industry∩geography matches only; typical good matches belong in 55–75. SPREAD the scores so the ranking is visible in them (no two events tied, rank 1 highest) and stay consistent with the rank order.
-7b. COUNT THE WHOLE FIELD. Report in `candidates_considered` the TOTAL number of distinct qualifying events you found during searching (passing the geography, date and role∩industry filters) — not just the 6 you picked. If listing pages showed you 20 qualifying events and you verified the best 6, candidates_considered is 20. Never report fewer than the events you return; never inflate beyond what you actually saw.
-8. SEARCH SMART, NOT LONG — HARD BUDGET: AT MOST 6 WEB SEARCHES TOTAL. The user is waiting on a live page; answer in well under a minute. Make every search count: start with 2-3 broad, high-yield queries (e.g. "<industry> <persona> conference <region> 2026", a 10times/industry-association listing page), which typically surface many candidates at once, then spend the remaining searches only on verifying the strongest candidates' dates/venues. Do NOT run one search per candidate, do NOT re-search what a listing page already told you, and once you have 6 solid verified events STOP searching. A strong list from 5 searches beats a perfect list from 15.
+7. RANKING & SCORING. Rank 1 → 6 by: (a) density of the exact target persona+industry, (b) event size/seniority of audience, (c) date proximity inside the window, (d) city relevance if cities were given. relevance_score is 0-100, scored against the IDEAL event for this ICP - reserve 80+ (A+ territory) for near-perfect role∩industry∩geography matches only; typical good matches belong in 55-75. SPREAD the scores so the ranking is visible in them (no two events tied, rank 1 highest) and stay consistent with the rank order.
+7b. COUNT THE WHOLE FIELD. Report in `candidates_considered` the TOTAL number of distinct qualifying events you found during searching (passing the geography, date and role∩industry filters) - not just the 6 you picked. If listing pages showed you 20 qualifying events and you verified the best 6, candidates_considered is 20. Never report fewer than the events you return; never inflate beyond what you actually saw.
+8. SEARCH SMART, NOT LONG - HARD BUDGET: AT MOST 6 WEB SEARCHES TOTAL. The user is waiting on a live page; answer in well under a minute. Make every search count: start with 2-3 broad, high-yield queries (e.g. "<industry> <persona> conference <region> 2026", a 10times/industry-association listing page), which typically surface many candidates at once, then spend the remaining searches only on verifying the strongest candidates' dates/venues. Do NOT run one search per candidate, do NOT re-search what a listing page already told you, and once you have 6 solid verified events STOP searching. A strong list from 5 searches beats a perfect list from 15.
 
 OUTPUT FORMAT
-Reply with ONE JSON object and NOTHING else — no prose, no markdown fences.
+Reply with ONE JSON object and NOTHING else - no prose, no markdown fences.
 {
   "search_notes": "<1-3 sentences: how many verified events found, any gaps/caveats>",
-  "candidates_considered": 0,      // TOTAL distinct qualifying events seen while searching (see rule 7b) — integer ≥ number of events returned
+  "candidates_considered": 0,      // TOTAL distinct qualifying events seen while searching (see rule 7b) - integer ≥ number of events returned
   "events": [
     {
       "rank": 1,
@@ -78,7 +78,7 @@ Reply with ONE JSON object and NOTHING else — no prose, no markdown fences.
       "relevance_score": 0,             // 0-100
       "fit_verdict": "GO",              // "GO" (strong fit) or "CONSIDER"
       "verdict_notes": "",              // 1-2 sentences: WHY this ICP should (not) prioritise it, citing persona + geography + size
-      "confidence": "high"              // "high" | "medium" | "low" — how well you verified it
+      "confidence": "high"              // "high" | "medium" | "low" - how well you verified it
     }
   ]
 }"""
@@ -90,11 +90,11 @@ def build_user_prompt(profile: dict) -> str:
     lines = [
         f"TODAY'S DATE: {today}",
         "",
-        "ICP (raw form input — YOU identify the roles/designations and industries from the buyer "
+        "ICP (raw form input - YOU identify the roles/designations and industries from the buyer "
         "description yourself; no pre-parsed lists are provided, and any wording is valid):",
         f"- Buyer description (raw, source of truth): {profile.get('buyer_description') or '-'}",
         f"- Company: {profile.get('company_name') or '-'}",
-        f"- Target geographies (HARD filter — events must be physically held here): {', '.join(profile.get('target_geographies') or []) or 'Global'}",
+        f"- Target geographies (HARD filter - events must be physically held here): {', '.join(profile.get('target_geographies') or []) or 'Global'}",
         f"- Date window (HARD filter): {profile.get('date_from') or today} to {profile.get('date_to') or 'next 12 months'}",
         f"- Average deal size: {profile.get('avg_deal_size_category') or 'medium'}",
         f"- Preferred event types: {', '.join(profile.get('preferred_event_types') or []) or 'conference, trade show, summit, expo'}",
@@ -164,7 +164,7 @@ def _validate_events(raw_events: list, profile: dict) -> list:
         if date_to and start and start[:10] > date_to:
             continue                      # outside requested window → drop
         # Geography is enforced by the GPT prompt itself (hard filter,
-        # rule 2) — no server-side country mapping. Whatever designation
+        # rule 2) - no server-side country mapping. Whatever designation
         # and country the user typed goes to GPT verbatim, and GPT's
         # results come back unfiltered on geo.
         try:
@@ -225,7 +225,7 @@ async def run_gpt_event_search(profile: dict) -> dict:
             {"role": "user",   "content": build_user_prompt(profile)},
         ],
     )
-    # Reasoning models (gpt-5, o-series) accept an effort control —
+    # Reasoning models (gpt-5, o-series) accept an effort control -
     # "low" cuts the wait from minutes to tens of seconds. Non-reasoning
     # models (gpt-4o) reject the param, so only send it where valid.
     model = settings.openai_search_model.lower()

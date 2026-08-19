@@ -11,7 +11,7 @@ export default function StatsRow({ stats }) {
   const totalEvents = stats?.total_events_in_db > 0 ? stats.total_events_in_db : null
   const countries   = stats?.countries_covered  > 0 ? stats.countries_covered  : null
 
-  // "live data sources" cell removed from display — kept the stat wired
+  // "live data sources" cell removed from display - kept the stat wired
   // server-side (stats.live_sources) in case it's needed again, just not
   // shown here since a low connector count reads as an unimpressive number.
   const CELLS = [

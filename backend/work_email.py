@@ -1,5 +1,5 @@
 """
-backend/work_email.py — server-side corporate-email check.
+backend/work_email.py - server-side corporate-email check.
 
 Mirrors frontend/src/lib/workEmail.js (keep the two lists in sync).
 The frontend already blocks free providers in the UI; this is the
@@ -54,9 +54,9 @@ DISPOSABLE_DOMAINS = {
     "33mail.com", "anonaddy.com", "simplelogin.io", "duckduckgo.com",
 }
 
-DISPOSABLE_EMAIL_ERROR = ("Disposable email addresses are not accepted — "
+DISPOSABLE_EMAIL_ERROR = ("Disposable email addresses are not accepted - "
                           "please use your company work email.")
-NO_MX_ERROR = ("This email domain doesn't appear to receive mail — "
+NO_MX_ERROR = ("This email domain doesn't appear to receive mail - "
                "please check the address or use your company work email.")
 
 
@@ -64,7 +64,7 @@ async def verify_work_email(email: str) -> tuple:
     """Full server-side check: (ok, reason).
     Layers: syntax → free provider → disposable provider → live DNS MX
     lookup (cached 24h). DNS infrastructure failures fail OPEN (a
-    resolver outage must never block real signups) — only a definitive
+    resolver outage must never block real signups) - only a definitive
     "domain does not exist / has no mail server" fails the email."""
     e = (email or "").strip()
     domain = email_domain(e)
@@ -96,7 +96,7 @@ async def verify_work_email(email: str) -> tuple:
             ok = False           # domain does not exist at all
             definitive = True
         except dns.resolver.NoAnswer:
-            # No MX record — some real companies receive mail via an
+            # No MX record - some real companies receive mail via an
             # A-record fallback; check the domain resolves at all.
             try:
                 await resolver.resolve(domain, "A")

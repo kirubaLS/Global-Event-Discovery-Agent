@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────
-# RENDER.YAML — Event Intelligence Agent (slim)
+# RENDER.YAML - Event Intelligence Agent (slim)
 #
 # No database, no scrapers, no queue. The backend is two endpoints:
 #   POST /api/search        → ChatGPT real web search (needs OPENAI_API_KEY)
@@ -30,11 +30,11 @@ services:
       - key: OPENAI_SEARCH_MODEL
         value: gpt-5
 
-      # ── Lead capture (optional — Neon Postgres connection string) ──
+      # ── Lead capture (optional - Neon Postgres connection string) ──
       - key: DATABASE_URL
         sync: false   # ← set in Render dashboard (keep secret); unset = nothing stored
 
-      # ── Upstash Redis (optional — cache + daily rate limit) ───────
+      # ── Upstash Redis (optional - cache + daily rate limit) ───────
       - key: REDIS_URL
         sync: false   # ← rediss://default:<pass>@<host>.upstash.io:6379
       - key: SEARCH_DAILY_LIMIT
@@ -48,7 +48,7 @@ services:
       - key: BREVO_FROM_EMAIL
         sync: false   # a sender verified in Brevo, e.g. verify@expotofunnel.com
 
-      # ── OTP via SMTP (paid hosts only — Render free blocks the ports)
+      # ── OTP via SMTP (paid hosts only - Render free blocks the ports)
       - key: SMTP_HOST
         sync: false   # e.g. smtp.gmail.com or smtp-relay.brevo.com
       - key: SMTP_PORT
@@ -60,7 +60,7 @@ services:
       - key: SMTP_FROM
         sync: false   # optional; defaults to SMTP_USER
 
-      # ── Email (Resend — PDF report only once SMTP is set) ─────────
+      # ── Email (Resend - PDF report only once SMTP is set) ─────────
       - key: RESEND_API_KEY
         sync: false
       - key: RESEND_FROM_EMAIL

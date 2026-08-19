@@ -1,12 +1,12 @@
 """
-backend/cache.py — Upstash Redis: search-result cache + daily rate limit.
+backend/cache.py - Upstash Redis: search-result cache + daily rate limit.
 
 Two jobs, both protecting your OpenAI bill:
   1. Cache: identical ICP searches within CACHE TTL reuse the stored
      top-6 result instead of paying for another web search.
   2. Rate limit: N searches per device (or IP fallback) per UTC day.
 
-OPTIONAL: with REDIS_URL unset (or Redis down) both silently no-op —
+OPTIONAL: with REDIS_URL unset (or Redis down) both silently no-op -
 no caching, no limits, app behaves as before. Upstash gives a
 rediss:// URL (TLS) which redis-py handles natively.
 """
@@ -31,7 +31,7 @@ async def _get_client():
         return _client
     if not settings.redis_url:
         _disabled = True
-        logger.info("REDIS_URL not set — no search cache / rate limit")
+        logger.info("REDIS_URL not set - no search cache / rate limit")
         return None
     try:
         import redis.asyncio as aioredis
@@ -40,7 +40,7 @@ async def _get_client():
             socket_timeout=5, socket_connect_timeout=5,
         )
         await _client.ping()
-        logger.info("Redis connected — search cache + rate limit enabled")
+        logger.info("Redis connected - search cache + rate limit enabled")
     except Exception as e:
         logger.warning(f"Redis unavailable, cache/limits disabled: {e}")
         _client, _disabled = None, True
@@ -52,7 +52,7 @@ async def _get_client():
 def search_cache_key(profile: dict) -> str:
     """Stable key from the fields that actually change the search."""
     basis = {
-        # Raw buyer text only — parsed industry/persona lists are no longer
+        # Raw buyer text only - parsed industry/persona lists are no longer
         # sent to GPT (it identifies roles/industries itself), so they must
         # not split the cache either.
         "buyer": (profile.get("buyer_description") or "").strip().lower(),
@@ -122,7 +122,7 @@ async def check_rate_limit(device_id: str, ip: str) -> Optional[str]:
     """Returns an error message when over the daily cap, else None.
 
     Robust dual-key limit: the IP and the device id are counted as
-    SEPARATE keys and exceeding EITHER blocks the search — clearing
+    SEPARATE keys and exceeding EITHER blocks the search - clearing
     localStorage mints a new device id but not a new IP, and rotating
     IPs on one machine still trips the device key. When Redis is
     unreachable the caller falls back to counting today's submissions

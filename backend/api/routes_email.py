@@ -129,7 +129,7 @@ def _build_html(request: EmailReportRequest) -> str:
             </div>""")
         return "".join(cards)
 
-    # One shared Meeting Packages section at the end of the report —
+    # One shared Meeting Packages section at the end of the report -
     # the packages are identical for every event, so repeating the
     # table per event card only bloated the PDF.
     _pkg_rows = "".join(f"""
@@ -144,7 +144,7 @@ def _build_html(request: EmailReportRequest) -> str:
   <div style="margin-top:32px;break-inside:avoid;">
     <div class="section-heading">LeadStrategus Meeting Packages</div>
     <p style="font-size:12px;color:#6b7280;line-height:1.6;margin-bottom:10px;">
-      These packages apply to any event in this report — we research your target
+      These packages apply to any event in this report - we research your target
       accounts, reach out pre-show, and fill your calendar with confirmed meetings
       before you fly out.
     </p>
@@ -168,7 +168,7 @@ def _build_html(request: EmailReportRequest) -> str:
         return seen
 
     # target_industries/personas can be empty when the async ICP parse
-    # hadn't populated them at submit time — fall back to what GPT
+    # hadn't populated them at submit time - fall back to what GPT
     # actually tagged on the events, then to the raw buyer description,
     # so the report never shows a bare "-" when we do know the target.
     _industries = p.target_industries or _agg("industry")

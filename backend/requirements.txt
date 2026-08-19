@@ -11,16 +11,16 @@ python-dotenv
 # ── ChatGPT real web search (the entire event pipeline) ──────────────
 openai
 
-# ── Lead capture / tracking (optional — needs DATABASE_URL, Neon Postgres)
+# ── Lead capture / tracking (optional - needs DATABASE_URL, Neon Postgres)
 asyncpg
 
-# ── Upstash Redis cache + daily rate limit (optional — needs REDIS_URL)
+# ── Upstash Redis cache + daily rate limit (optional - needs REDIS_URL)
 redis
 
 # ── PDF generation (HTML → PDF) for /api/email-report ────────────────
 # WeasyPrint requires system libs; see render.yaml buildCommand
 weasyprint
-# Pure-Python fallback — zero system deps, always works
+# Pure-Python fallback - zero system deps, always works
 fpdf2
 
 # ── Email delivery ────────────────────────────────────────────────────

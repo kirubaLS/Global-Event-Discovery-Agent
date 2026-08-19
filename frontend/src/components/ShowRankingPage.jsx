@@ -99,7 +99,7 @@ function getICPCount(event) {
   if (!est) return null
   const low  = Math.max(10, Math.round(est * 0.70 / 10) * 10)
   const high = Math.round(est * 1.30 / 10) * 10
-  return { estimate: est, low, high, display: `~${est.toLocaleString()}`, range_display: `${low.toLocaleString()} – ${high.toLocaleString()}`, methodology: 'Based on est. attendees × 35% DM ratio × ICP density.' }
+  return { estimate: est, low, high, display: `~${est.toLocaleString()}`, range_display: `${low.toLocaleString()} - ${high.toLocaleString()}`, methodology: 'Based on est. attendees × 35% DM ratio × ICP density.' }
 }
 // ── Pipeline estimate: formula-driven ────────────────────────────
 // ICP count × deal midpoint × 0.15 (15% contact rate × 40% qual × 25% close proxy)
@@ -177,16 +177,16 @@ export default function ShowRankingPage({
   const dateFiltered = applyDateFilter(events, dateWindow)
 
   // Full pool for EventTable: ONLY the top-6 ranked events. allRelevantEvents
-  // (everything beyond the top 6) never goes through the LLM ranker — no
+  // (everything beyond the top 6) never goes through the LLM ranker - no
   // rationale, no What It's About, no Key Numbers, nothing to back up its
-  // GO/CONSIDER badge — so it doesn't belong in a table whose whole premise
+  // GO/CONSIDER badge - so it doesn't belong in a table whose whole premise
   // is "expand any row for AI analysis." Showing 6 (or fewer, after date
   // filtering) genuinely-analyzed events beats padding the table with rows
   // that display a verdict nobody can actually explain.
   const fullEventPool = dateFiltered
 
   // Top 6 shown in ranked list
-  // Rows 1–3 free, rows 4–6 email-gated
+  // Rows 1-3 free, rows 4-6 email-gated
   const top6 = dateFiltered.slice(0, 6)
 
   // Universe stats - prefer API-provided universe_stats when available
@@ -205,7 +205,7 @@ export default function ShowRankingPage({
   const bannerParts = []
   if (profile?.target_personas?.length)   bannerParts.push(profile.target_personas.slice(0, 2).join(' · '))
   if (profile?.target_industries?.length) bannerParts.push(profile.target_industries.slice(0, 2).join(' · '))
-  const dealLabels = { medium: '$10K–$50K', high: '$50K–$100K', enterprise: '$100K–$500K', strategic: '$500K+' }
+  const dealLabels = { medium: '$10K-$50K', high: '$50K-$100K', enterprise: '$100K-$500K', strategic: '$500K+' }
   if (profile?.avg_deal_size_category) bannerParts.push(`${dealLabels[profile.avg_deal_size_category] || ''} deals`)
   if (profile?.target_geographies?.length) bannerParts.push(profile.target_geographies.slice(0, 3).join(' · '))
 
@@ -356,7 +356,7 @@ export default function ShowRankingPage({
             )}
             <p className="rk-banner-sub">
               {totalConsidering > top6.length ? (
-                <>We found <strong>{totalConsidering}</strong> relevant events for your ICP — here are the <strong>top {top6.length}</strong> where your buyers concentrate.</>
+                <>We found <strong>{totalConsidering}</strong> relevant events for your ICP - here are the <strong>top {top6.length}</strong> where your buyers concentrate.</>
               ) : (
                 <>Out of 17,000+ shows, here are the <strong>{top6.length}</strong> where your buyers concentrate.</>
               )}
@@ -405,7 +405,7 @@ export default function ShowRankingPage({
 
       {/* ── ICP travel note ──────────────────────────────────── */}
       <p style={{ margin: '10px 24px 0', fontSize: 12, color: 'var(--ink-faint)', textAlign: 'center' }}>
-        ℹ️ Locations below are where each <strong>event is held</strong> — your ICP may travel outside their home geography to attend relevant events.
+        ℹ️ Locations below are where each <strong>event is held</strong> - your ICP may travel outside their home geography to attend relevant events.
       </p>
 
       {/* ── 2. UNIVERSE STATS ────────────────────────────────── */}
@@ -516,7 +516,7 @@ export default function ShowRankingPage({
                           const icpData = getICPCount(event)
                           if (!icpData) return (
                             <span className="rk-meta-item" style={{ color: 'var(--ink-faint)', fontStyle: 'italic' }}
-                              title="The organiser hasn't published attendee figures for this edition yet — ICP estimates appear once they do.">
+                              title="The organiser hasn't published attendee figures for this edition yet - ICP estimates appear once they do.">
                               Estimated attendees: not yet published ⓘ
                             </span>
                           )
@@ -535,7 +535,7 @@ export default function ShowRankingPage({
                       </>
                     )}
                     {gated && (
-                      <span className="rk-meta-item rk-blur-text">███ · ███ ██–██ · ~███ ICPs</span>
+                      <span className="rk-meta-item rk-blur-text">███ · ███ ██-██ · ~███ ICPs</span>
                     )}
                   </div>
 
@@ -596,7 +596,7 @@ export default function ShowRankingPage({
               <div className="rk-gate-icon" aria-hidden="true">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
               </div>
-              <h3 className="rk-gate-title">Shows #4–#6 are one click away</h3>
+              <h3 className="rk-gate-title">Shows #4-#6 are one click away</h3>
               <p className="rk-gate-sub">Enter your work email to unlock the full ranking and the 90-day executive playbook.</p>
               <div className="rk-gate-form">
                 <input type="email" value={gateEmail} onChange={e => { setGateEmail(e.target.value); setGateError('') }}
@@ -652,16 +652,16 @@ export default function ShowRankingPage({
           </p>
           {(() => {
             const REF_NOTES = {
-              '0':     { label: 'no public client references yet',  note: 'outreach starts cold, so allow extra ramp-up time — packages reflect standard effort' },
-              '1-5':   { label: '1–5 public client references',     note: 'solid starting proof for outreach — standard effort applies' },
-              '6-10':  { label: '6–10 public client references',    note: 'a good proof base cuts outreach effort — mention it when you contact us for reduced pricing' },
-              '11-20': { label: '11–20 public client references',   note: 'a strong logo wall meaningfully cuts outreach effort — mention it for reduced pricing' },
-              '20+':   { label: '20+ public client references',     note: 'outreach nearly writes itself — mention it for our best reference pricing' },
+              '0':     { label: 'no public client references yet',  note: 'outreach starts cold, so allow extra ramp-up time - packages reflect standard effort' },
+              '1-5':   { label: '1-5 public client references',     note: 'solid starting proof for outreach - standard effort applies' },
+              '6-10':  { label: '6-10 public client references',    note: 'a good proof base cuts outreach effort - mention it when you contact us for reduced pricing' },
+              '11-20': { label: '11-20 public client references',   note: 'a strong logo wall meaningfully cuts outreach effort - mention it for reduced pricing' },
+              '20+':   { label: '20+ public client references',     note: 'outreach nearly writes itself - mention it for our best reference pricing' },
             }
             const r = REF_NOTES[profile?.public_reference_range]
             return r ? (
               <p className="rk-pricing-sub" style={{ fontSize: 12.5, color: 'var(--c-find)', fontWeight: 600 }}>
-                Your profile: {r.label} — {r.note}.
+                Your profile: {r.label} - {r.note}.
               </p>
             ) : null
           })()}
@@ -690,7 +690,7 @@ export default function ShowRankingPage({
               <div className="rk-tier-outcome">10 qualified meetings</div>
               <ul className="rk-tier-list">
                 <li>Everything in Discover</li>
-                <li>Shows ranked 7–23</li>
+                <li>Shows ranked 7-23</li>
                 <li>Pre-show ICP outreach</li>
                 <li>10 confirmed meetings</li>
                 <li>Post-event follow-up</li>

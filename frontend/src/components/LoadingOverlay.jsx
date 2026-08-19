@@ -24,7 +24,7 @@ function calcProbability(profile) {
   else if (ds === 'strategic')  score += 12
   else if (ds === 'medium')     score += 8
 
-  // Differentiator score (1–10)
+  // Differentiator score (1-10)
   const diff = Number(profile.differentiator_score) || 5
   if (diff >= 8) score += 12
   else if (diff >= 6) score += 7
