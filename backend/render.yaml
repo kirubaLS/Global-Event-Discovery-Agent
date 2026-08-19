@@ -28,7 +28,7 @@ services:
       - key: OPENAI_API_KEY
         sync: false   # ← set in Render dashboard, not here (keep secret)
       - key: OPENAI_SEARCH_MODEL
-        value: gpt-4o
+        value: gpt-5
 
       # ── Lead capture (optional - Neon Postgres connection string) ──
       - key: DATABASE_URL

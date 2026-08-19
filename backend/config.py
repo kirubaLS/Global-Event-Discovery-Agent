@@ -22,12 +22,12 @@ class Settings(BaseSettings):
     # ── OpenAI (ChatGPT with real web search) ─────────────────────
     openai_api_key: str = ""
     # Must be a model that supports the Responses API `web_search` tool.
-    # Default gpt-4o: web search finishes in ~30-60s, which reliably
-    # completes inside the frontend poll window and shrinks the window in
-    # which a free-tier restart can kill an in-flight search. gpt-5
-    # (reasoning) is more thorough but runs 3-5 min - too long/fragile on
-    # Render free; set OPENAI_SEARCH_MODEL=gpt-5 to opt back in.
-    openai_search_model: str = "gpt-4o"
+    # gpt-5 (reasoning): most thorough web search + verification. Runs
+    # ~1-3 min at low effort; the async job + polling flow (routes_search)
+    # covers the wait. Needs OpenAI credit on the account - an empty
+    # balance makes the call fail/stall. Switch to gpt-4o for faster,
+    # cheaper (but less thorough) runs via OPENAI_SEARCH_MODEL.
+    openai_search_model: str = "gpt-5"
     # Reasoning effort for gpt-5/o-series: low keeps the iterative
     # search-and-verify behaviour but cuts thinking time from minutes
     # to tens of seconds. Raise to "medium" only if result quality dips.
