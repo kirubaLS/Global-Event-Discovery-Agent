@@ -21,7 +21,7 @@ from config import get_settings
 settings = get_settings()
 
 _pool = None          # asyncpg.Pool | None
-_disabled = False     # set True after a fatal init failure - stop retrying
+_no_db_url = False     # latched ONLY when DATABASE_URL is unset
 
 
 def _normalise_dsn(url: str) -> str:
@@ -30,25 +30,47 @@ def _normalise_dsn(url: str) -> str:
     return url.replace("postgresql+asyncpg://", "postgresql://", 1)
 
 
+async def _reset_pool():
+    """Drop the current pool so the next _get_pool() rebuilds it. Called
+    after a connection error (e.g. Neon free-tier idle-suspend killed the
+    pooled connection) so a transient drop self-heals instead of
+    disabling storage/OTP for the whole process lifetime."""
+    global _pool
+    p, _pool = _pool, None
+    if p is not None:
+        try:
+            await p.close()
+        except Exception:
+            pass
+
+
 async def _get_pool():
-    global _pool, _disabled
-    if _pool is not None or _disabled:
-        return _pool
+    global _pool, _no_db_url
+    if _no_db_url:
+        return None
     if not settings.database_url:
-        _disabled = True
+        _no_db_url = True
         logger.info("DATABASE_URL not set - submissions/results are not stored")
         return None
+    if _pool is not None:
+        return _pool
     try:
         import asyncpg
         _pool = await asyncpg.create_pool(
             _normalise_dsn(settings.database_url), min_size=0, max_size=3,
             command_timeout=15,
+            # Recycle idle connections well before Neon's idle-suspend so
+            # we don't hand out a dead socket ("connection was closed in
+            # the middle of operation").
+            max_inactive_connection_lifetime=120,
         )
         await _init_tables(_pool)
         logger.info("DB connected - lead/tracking storage enabled")
     except Exception as e:
-        logger.warning(f"DB unavailable, storage disabled: {e}")
-        _pool, _disabled = None, True
+        # Transient failure (Neon waking up, network blip): do NOT latch
+        # off — leave _pool None so the next request retries.
+        logger.warning(f"DB connect attempt failed (will retry next request): {e}")
+        _pool = None
     return _pool
 
 
@@ -155,6 +177,7 @@ async def log_submission(profile: dict, ip: str, device_id: str,
         return sub_id
     except Exception as e:
         logger.warning(f"log_submission failed: {e}")
+        await _reset_pool()
         return None
 
 
@@ -175,6 +198,7 @@ async def log_search_result(submission_id: Optional[str], result: dict) -> None:
             )
     except Exception as e:
         logger.warning(f"log_search_result failed: {e}")
+        await _reset_pool()
 
 
 async def upsert_session(session_id: str, referrer: str, landing_page: str,
@@ -192,6 +216,7 @@ async def upsert_session(session_id: str, referrer: str, landing_page: str,
             )
     except Exception as e:
         logger.warning(f"upsert_session failed: {e}")
+        await _reset_pool()
 
 
 async def session_heartbeat(session_id: str, delta_seconds: int) -> None:
@@ -208,6 +233,7 @@ async def session_heartbeat(session_id: str, delta_seconds: int) -> None:
             )
     except Exception as e:
         logger.warning(f"session_heartbeat failed: {e}")
+        await _reset_pool()
 
 
 async def log_activity(session_id: str, event_type: str, submission_id: str,
@@ -227,6 +253,7 @@ async def log_activity(session_id: str, event_type: str, submission_id: str,
             )
     except Exception as e:
         logger.warning(f"log_activity failed: {e}")
+        await _reset_pool()
 
 
 async def log_email_report(email: str, event_count: int, company_name: str,
@@ -245,6 +272,7 @@ async def log_email_report(email: str, event_count: int, company_name: str,
             )
     except Exception as e:
         logger.warning(f"log_email_report failed: {e}")
+        await _reset_pool()
 
 
 async def count_searches_today(ip: str, device_id: str) -> int:
@@ -266,6 +294,7 @@ async def count_searches_today(ip: str, device_id: str) -> int:
             return int(row["n"] or 0)
     except Exception as e:
         logger.warning(f"count_searches_today failed: {e}")
+        await _reset_pool()
         return 0
 
 
@@ -290,6 +319,7 @@ async def create_verification(email: str, code_hash: str, ip: str,
         return True
     except Exception as e:
         logger.warning(f"create_verification failed: {e}")
+        await _reset_pool()
         return False
 
 
@@ -307,6 +337,7 @@ async def sends_in_last_hour(email: str, ip: str) -> int:
             return int(row["n"] or 0)
     except Exception as e:
         logger.warning(f"sends_in_last_hour failed: {e}")
+        await _reset_pool()
         return 0
 
 
@@ -338,6 +369,7 @@ async def check_verification_code(email: str, code_hash: str,
         return "ok"
     except Exception as e:
         logger.warning(f"check_verification_code failed: {e}")
+        await _reset_pool()
         return "unavailable"
 
 
@@ -356,6 +388,7 @@ async def is_email_verified(email: str, within_days: int = 30) -> Optional[bool]
             return row is not None
     except Exception as e:
         logger.warning(f"is_email_verified failed: {e}")
+        await _reset_pool()
         return None
 
 
@@ -375,3 +408,4 @@ async def log_consent(consent_type: str, accepted: bool, categories: list,
             )
     except Exception as e:
         logger.warning(f"log_consent failed: {e}")
+        await _reset_pool()
