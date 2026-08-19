@@ -269,6 +269,7 @@ export default function App() {
   const [maintenance,      setMaintenance]       = useState(null)
 
   useEffect(() => {
+    if (buildTimeMaintenance) return   // already showing maintenance, no need to also hit the API
     api.getMaintenanceStatus()
       .then(s => setMaintenance({ on: !!s.maintenance, message: s.message || '' }))
       .catch(() => setMaintenance({ on: false, message: '' }))   // backend unreachable - fall through to the normal ErrorPage flow instead of a false "under maintenance"
