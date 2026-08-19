@@ -93,7 +93,7 @@ async def search(req: SearchRequest, request: Request):
     # queued pattern survives that — the browser polls a fast status
     # endpoint instead of holding one long connection open.
     job_id = str(uuid.uuid4())
-    _JOBS[job_id] = {"status": "processing"}
+    await _set_job(job_id, {"status": "processing"})
     asyncio.create_task(
         _run_search_job(job_id, dict(req.profile), ip, device_id, session_id)
     )
@@ -104,6 +104,13 @@ async def search(req: SearchRequest, request: Request):
 _JOBS: dict = {}
 
 
+async def _set_job(job_id: str, value: dict) -> None:
+    _JOBS[job_id] = value
+    # Mirror to Redis (10 min TTL) so a finished result survives an
+    # in-memory wipe / brief instance change and any poll can fetch it.
+    await cache.set_json(f"job:{job_id}", value, ttl_seconds=600)
+
+
 async def _run_search_job(job_id: str, profile: dict, ip: str,
                           device_id: str, session_id: str) -> None:
     try:
@@ -112,25 +119,22 @@ async def _run_search_job(job_id: str, profile: dict, ip: str,
             await cache.set_cached_search(profile, result)
         sub_id = await db.log_submission(profile, ip, device_id, session_id, False)
         await db.log_search_result(sub_id, result)
-        _JOBS[job_id] = {"status": "done", "result": result}
+        await _set_job(job_id, {"status": "done", "result": result})
     except RuntimeError as e:               # missing API key
-        _JOBS[job_id] = {"status": "error", "error": str(e)}
+        await _set_job(job_id, {"status": "error", "error": str(e)})
     except Exception as e:
         logger.error(f"GPT event search failed: {e}")
-        _JOBS[job_id] = {"status": "error", "error": "Search failed - please try again."}
+        await _set_job(job_id, {"status": "error", "error": "Search failed - please try again."})
 
 
 @router.get("/search/status/{job_id}")
 async def search_status(job_id: str):
-    job = _JOBS.get(job_id)
+    job = _JOBS.get(job_id) or await cache.get_json(f"job:{job_id}")
     if not job:
-        # Unknown id: the job never existed, or the instance restarted and
-        # lost it. Treat as a retryable error, not a hang.
+        # Unknown id: the job never existed, or the instance restarted
+        # mid-search and lost the running task. Retryable, not a hang.
         return {"status": "error", "error": "Search expired - please try again."}
-    if job["status"] in ("done", "error"):
-        # Hand it over once, then free the memory.
-        return _JOBS.pop(job_id)
-    return {"status": "processing"}
+    return job
 
 
 # ── Maintenance + stats ─────────────────────────────────────────────
