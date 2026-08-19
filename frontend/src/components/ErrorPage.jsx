@@ -1,10 +1,10 @@
 /*
-  ErrorPage.jsx   full-page fallback for fatal errors — server down,
+  ErrorPage.jsx   full-page fallback for fatal errors - server down,
   network unreachable, API 5xx, or an uncaught render crash.
 
   Rendered from two places:
-    1. ErrorBoundary — catches React render-time crashes anywhere below it.
-    2. App.jsx        — set as the active screen when a core action (search)
+    1. ErrorBoundary - catches React render-time crashes anywhere below it.
+    2. App.jsx        - set as the active screen when a core action (search)
                          fails with a network/server-level error.
 */
 import { WifiOff, ServerCrash, AlertTriangle, Wrench, RefreshCw, Home } from 'lucide-react'

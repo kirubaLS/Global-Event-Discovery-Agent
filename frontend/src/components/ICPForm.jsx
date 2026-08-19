@@ -41,10 +41,10 @@ const BUYER_SUGGESTIONS = [
   'leaders in energy and sustainability',
   'decision-makers in retail technology',
   'executives in real estate technology',
-  // Single-persona, industry-agnostic examples — a vertical-agnostic
+  // Single-persona, industry-agnostic examples - a vertical-agnostic
   // platform (e.g. cybersecurity/cloud sold across every industry) can
   // skip a vertical entirely; leaving industry out of the sentence
-  // means "no industry restriction," not "guess one." One role only —
+  // means "no industry restriction," not "guess one." One role only -
   // the pipeline targets a single role + industry pair, not several.
   'CISOs across all industries',
   'VP Engineering, any industry',
@@ -107,7 +107,7 @@ const DEAL_BRACKETS = [
   },
 ]
 
-// Buyer text parsing is LLM-only now (POST /api/parse-icp) — the old
+// Buyer text parsing is LLM-only now (POST /api/parse-icp) - the old
 // hardcoded keyword→industry map was removed so the model reads the
 // user's exact wording (any role, any industry, any abbreviation).
 
@@ -174,7 +174,7 @@ export default function ICPForm({
   // is the "Global event agent icp form" widget in the Cloudflare
   // dashboard; the matching secret lives server-side only, as
   // TURNSTILE_SECRET (see backend/api/bot_protection.py).
-  // Disabled for now — restore the sitekey ('0x4AAAAAAEFPmIRRrqFyz0Pf')
+  // Disabled for now - restore the sitekey ('0x4AAAAAAEFPmIRRrqFyz0Pf')
   // to re-enable the Turnstile widget; everything below is gated on it.
   const TURNSTILE_SITE_KEY = ''
 
@@ -232,7 +232,7 @@ export default function ICPForm({
     }
   }, [TURNSTILE_SITE_KEY])
 
-  // ── Live country list from the DB — replaces the static GEO_OPTIONS
+  // ── Live country list from the DB - replaces the static GEO_OPTIONS
   // fallback once loaded, so the dropdown always reflects what's
   // actually in the event catalog (falls back to GEO_OPTIONS on error).
   const [dbGeoOptions, setDbGeoOptions] = useState(null)
@@ -283,7 +283,7 @@ export default function ICPForm({
   }, [buyer])
 
   // LLM-only parse: the chips come exclusively from POST /api/parse-icp
-  // reading the user's exact wording — no keyword tables. Until the LLM
+  // reading the user's exact wording - no keyword tables. Until the LLM
   // reply for the current text arrives, source is 'pending' and nothing
   // is shown. (The parse is display-only anyway: the search itself sends
   // the raw buyer text to GPT.)
@@ -303,7 +303,7 @@ export default function ICPForm({
   }, [llmParse])
 
   // ── City hint: once a country is picked, show which cities within it
-  // actually have matching events for the typed role/industry — advisory
+  // actually have matching events for the typed role/industry - advisory
   // only, never blocks submit. candidate_retriever.py's own city -> country
   // -> no-geo widening already handles "no exact city" at search time
   // regardless of what's suggested here.
@@ -321,7 +321,7 @@ export default function ICPForm({
         const map = {}
         countryList.forEach((country, i) => { if (results[i]) map[country] = results[i] })
         setCityHints(map)
-      } catch (_) { /* advisory only — never block the form on failure */ }
+      } catch (_) { /* advisory only - never block the form on failure */ }
       finally { setCityHintLoad(false) }
     }, 600)
     return () => clearTimeout(cityHintTimer.current)
@@ -412,7 +412,7 @@ export default function ICPForm({
   const validate = () => {
     const e = {}
     if (!buyer.trim())     e.buyer = 'Tell us who you sell to'
-    // A region typed but not yet Enter/click-committed still counts —
+    // A region typed but not yet Enter/click-committed still counts -
     // it gets folded into geos on submit (see handleSubmit) so it must
     // not be treated as missing here.
     if (!geos.length && !geoSearch.trim()) e.geos = 'Select at least one geography'
@@ -435,7 +435,7 @@ export default function ICPForm({
       verifiedEmailRef.current = email.trim().toLowerCase()
       setOtpStage('verified')
       setOtpCode('')
-      toast.success('✅ Email verified — running your search…', { duration: 3500 })
+      toast.success('✅ Email verified - running your search…', { duration: 3500 })
       handleSubmit()
     } catch (err) {
       setOtpError(err.message || 'Verification failed - try again.')
@@ -447,7 +447,7 @@ export default function ICPForm({
   const handleResendOtp = async () => {
     try {
       await api.sendVerification(email.trim())
-      toast('📬 New code sent — check your inbox (and spam).', { duration: 5000 })
+      toast('📬 New code sent - check your inbox (and spam).', { duration: 5000 })
       setOtpCode(''); setOtpError('')
     } catch (err) {
       toast.error(err.message || 'Could not resend - try again shortly.')
@@ -488,12 +488,12 @@ export default function ICPForm({
       try {
         const sent = await api.sendVerification(email.trim())
         if (sent.skip) {
-          // verification infra not configured — server won't enforce either
+          // verification infra not configured - server won't enforce either
           verifiedEmailRef.current = email.trim().toLowerCase()
         } else {
           setOtpStage('sent')
           setOtpError('')
-          toast('📬 We emailed you a 6-digit code — enter it below to see your ranking.', { duration: 6000 })
+          toast('📬 We emailed you a 6-digit code - enter it below to see your ranking.', { duration: 6000 })
           requestAnimationFrame(() => {
             document.getElementById('icp-otp-input')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
             document.getElementById('icp-otp-input')?.focus()
@@ -518,7 +518,7 @@ export default function ICPForm({
       : clientNames
     if (pendingClient) { setClientNames(finalClientNames); setClientNameInput('') }
     // Same issue as client names, but for a REQUIRED field: a region typed
-    // into the geo search box is only added to `geos` on Enter or a click —
+    // into the geo search box is only added to `geos` on Enter or a click -
     // someone who types a region and goes straight to Submit (especially
     // once at least one other geo chip already exists, since validate()
     // only checks geos.length, not whether the typed text was committed)
@@ -544,7 +544,7 @@ export default function ICPForm({
       public_reference_range: refRange || '',
       client_names:         finalClientNames,
       email,
-      // Bot protection + consent — read by App.jsx::onSearch and sent as
+      // Bot protection + consent - read by App.jsx::onSearch and sent as
       // top-level fields on the /api/search request (see api/client.js).
       captcha_token:        captchaToken,
       honeypot,
@@ -748,7 +748,7 @@ export default function ICPForm({
             </div>
           )}
                {/* City hint: informational only, shown once a country is
-                   picked — suggests cities within it that actually have
+                   picked - suggests cities within it that actually have
                    matching events, so the user can optionally narrow their
                    own free-text city mention. Never blocks submit; the
                    search itself always falls back gracefully regardless. */}

@@ -1,6 +1,6 @@
 /*
   ErrorBoundary.jsx   catches uncaught JS errors anywhere in the render
-  tree below it (React error boundaries only catch class components —
+  tree below it (React error boundaries only catch class components -
   there's no hook equivalent) and shows ErrorPage instead of a blank
   white screen.
 */

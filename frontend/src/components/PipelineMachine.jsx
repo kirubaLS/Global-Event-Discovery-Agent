@@ -26,7 +26,7 @@ const MACHINES = [27, 52, 77]         // machine center positions in %
 // The scene is built at this fixed pixel width/height (percent-based
 // child positions, absolutely placed). transform: scale() shrinks it
 // visually but NOT its layout box, so a fixed-breakpoint scale() left
-// the scene still 1020px wide in the document — on a narrow phone the
+// the scene still 1020px wide in the document - on a narrow phone the
 // wrapper's overflow:hidden then clipped to whatever slice happened to
 // sit under the viewport (usually the middle), cutting the hopper and
 // tray off the edges. Measuring the real container width and scaling
@@ -129,7 +129,7 @@ export default function PipelineMachine({ stats }) {
     if (!el) return
     const measure = () => {
       const w = el.clientWidth
-      // Never upscale past the scene's native size — only shrink to fit.
+      // Never upscale past the scene's native size - only shrink to fit.
       setScale(w > 0 ? Math.min(1, w / SCENE_W) : 1)
     }
     measure()
@@ -162,7 +162,7 @@ export default function PipelineMachine({ stats }) {
         >
           {/* Framer Motion owns `transform` on motion.div for its own y
               animation and will silently overwrite any transform passed
-              via `style` — so the JS-computed scale lives on a plain,
+              via `style` - so the JS-computed scale lives on a plain,
               non-motion child instead of fighting it for the same property. */}
           <motion.div
             className="ef-scene-motion"

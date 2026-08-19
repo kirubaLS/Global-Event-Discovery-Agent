@@ -1,5 +1,5 @@
 """
-backend/main.py — LeadStrategus Event Intelligence Agent (slim).
+backend/main.py - LeadStrategus Event Intelligence Agent (slim).
 
 The whole event pipeline now lives in ONE call: /api/search →
 gpt_search.run_gpt_event_search() → ChatGPT real web search → top-6
@@ -30,7 +30,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Maintenance-mode kill switch — same contract the frontend already
+# Maintenance-mode kill switch - same contract the frontend already
 # relies on (App.jsx checks /api/maintenance-status before rendering).
 _MAINTENANCE_EXEMPT_PATHS = {"/health", "/api/maintenance-status"}
 
@@ -46,7 +46,7 @@ async def _maintenance_gate(request: Request, call_next):
             status_code=503,
             content={
                 "maintenance": True,
-                "message": settings.maintenance_message or "We're doing some quick maintenance — back shortly.",
+                "message": settings.maintenance_message or "We're doing some quick maintenance - back shortly.",
             },
         )
     return await call_next(request)

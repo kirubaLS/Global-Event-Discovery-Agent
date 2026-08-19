@@ -1,10 +1,10 @@
 """
-backend/api/routes_search.py — /api/search via ChatGPT web search,
+backend/api/routes_search.py - /api/search via ChatGPT web search,
 plus tiny stubs for the endpoints the (unchanged) frontend still calls.
 
 The old pipeline (DB, scrapers, embeddings, queue, analytics, consent)
 is gone. Every stub returns the safe "empty" shape its caller already
-handles gracefully — see frontend/src/api/client.js.
+handles gracefully - see frontend/src/api/client.js.
 """
 from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
@@ -21,7 +21,7 @@ settings = get_settings()
 
 
 def _client_ip(request: Request) -> str:
-    # Render sits behind a proxy — real client IP is the first entry
+    # Render sits behind a proxy - real client IP is the first entry
     # in X-Forwarded-For; request.client is the proxy otherwise.
     fwd = request.headers.get("x-forwarded-for", "")
     if fwd:
@@ -42,7 +42,7 @@ async def search(req: SearchRequest, request: Request):
         raise HTTPException(status_code=400, detail="Invalid submission.")
     if not (req.profile.get("buyer_description") or req.profile.get("target_industries")):
         raise HTTPException(status_code=422, detail="Describe your buyer first.")
-    # Corporate email only — free/disposable providers and domains that
+    # Corporate email only - free/disposable providers and domains that
     # don't actually receive mail (no MX record) are all rejected.
     email = (req.profile.get("email") or "").strip()
     if email:
@@ -51,7 +51,7 @@ async def search(req: SearchRequest, request: Request):
             raise HTTPException(status_code=422, detail=reason)
         # Proof-of-mailbox: the email must have completed OTP verification
         # (valid 30 days). Only enforced when an OTP sender (SMTP or
-        # Resend) and the DB are configured — without them there is no
+        # Resend) and the DB are configured - without them there is no
         # code to have entered.
         if otp_sender_configured():
             verified = await db.is_email_verified(email)
@@ -62,7 +62,7 @@ async def search(req: SearchRequest, request: Request):
     device_id  = request.headers.get("x-device-id", "")
     session_id = request.headers.get("x-session-id", "")
 
-    # Daily cap: IP and device are limited independently — exceeding
+    # Daily cap: IP and device are limited independently - exceeding
     # either blocks. Redis is the primary counter; if it's unreachable
     # the submissions table is the fallback so the limit survives a
     # Redis outage (only both layers down fails open).
@@ -157,7 +157,7 @@ def otp_sender_configured() -> bool:
 
 
 async def _send_otp_brevo(to: str, code: str) -> None:
-    """Brevo transactional-email HTTP API — port 443, so it works on
+    """Brevo transactional-email HTTP API - port 443, so it works on
     Render's free tier where outbound SMTP ports are blocked."""
     import httpx
     sender = settings.brevo_from_email or settings.smtp_from or settings.resend_from_email
@@ -178,7 +178,7 @@ async def _send_otp_brevo(to: str, code: str) -> None:
 
 def _send_otp_smtp(to: str, code: str) -> None:
     """Send the OTP over plain SMTP (Google Workspace app password,
-    Brevo SMTP key, or any other provider). Blocking — call via
+    Brevo SMTP key, or any other provider). Blocking - call via
     asyncio.to_thread."""
     import smtplib
     from email.mime.text import MIMEText
@@ -255,7 +255,7 @@ async def send_verification(req: ValidateEmailRequest, request: Request):
     ip = _client_ip(request)
     if await db.sends_in_last_hour(email, ip) >= 3:
         raise HTTPException(status_code=429,
-                            detail="Too many codes requested — try again in an hour.")
+                            detail="Too many codes requested - try again in an hour.")
     import secrets
     code = f"{secrets.randbelow(1_000_000):06d}"
     stored = await db.create_verification(email, _code_hash(email, code), ip)
@@ -266,7 +266,7 @@ async def send_verification(req: ValidateEmailRequest, request: Request):
     except Exception as e:
         logger.error(f"OTP send failed: {e}")
         raise HTTPException(status_code=502,
-                            detail="Couldn't send the code — please try again.")
+                            detail="Couldn't send the code - please try again.")
     return {"sent": True, "skip": False}
 
 
@@ -280,9 +280,9 @@ async def verify_email_code(req: VerifyCodeRequest):
     if status == "ok":
         return {"verified": True}
     if status == "wrong":
-        raise HTTPException(status_code=422, detail="That code isn't right — check the email and try again.")
+        raise HTTPException(status_code=422, detail="That code isn't right - check the email and try again.")
     if status == "expired":
-        raise HTTPException(status_code=422, detail="This code has expired — request a new one.")
+        raise HTTPException(status_code=422, detail="This code has expired - request a new one.")
     return {"verified": True}   # storage unavailable → fail open
 
 
@@ -291,7 +291,7 @@ async def validate_email(req: ValidateEmailRequest):
     """Live corporate-email check for the forms (ICP + contact): free
     providers, disposable providers, and domains with no mail server
     (MX lookup, Redis-cached 24h) are rejected. The search and
-    email-report endpoints re-verify server-side regardless — this
+    email-report endpoints re-verify server-side regardless - this
     endpoint just gives the user instant feedback."""
     ok, reason = await verify_work_email(req.email)
     return {"valid": ok, "reason": reason}
@@ -309,7 +309,7 @@ Rules: use the user's own vocabulary (expand well-known abbreviations, e.g. NBFC
 
 @router.post("/parse-icp")
 async def parse_icp(req: ParseIcpRequest):
-    """LLM parse of the raw buyer text — powers the live role+industry
+    """LLM parse of the raw buyer text - powers the live role+industry
     chips in the ICP form. No keyword tables: the model reads the exact
     wording. Falls back to {"source":"rules"} on any failure so the form
     never breaks. Results cached in Redis for 7 days (debounced typing
@@ -334,7 +334,7 @@ async def parse_icp(req: ParseIcpRequest):
             model=settings.openai_parse_model,
             input=[{"role": "system", "content": _PARSE_PROMPT},
                    {"role": "user", "content": text}],
-            # Chips are a few short arrays — cap hard so a runaway reply
+            # Chips are a few short arrays - cap hard so a runaway reply
             # can never make the form feel slow or cost real money.
             max_output_tokens=300,
         )

@@ -186,7 +186,7 @@ export default function HowItWorks({ stats }) {
         </div>
 
         <div className="hiw-service-note">
-          <strong>Step 01 is free and instant.</strong> Steps 02–03 are done for you
+          <strong>Step 01 is free and instant.</strong> Steps 02-03 are done for you
           by our team - see your ranked list first, then get in touch.
         </div>
 

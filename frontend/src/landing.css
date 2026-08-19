@@ -913,7 +913,7 @@
    clipped or leaves a gap in the document flow. .ef-scene keeps its
    native 1020x340 layout box always; only `transform: scale()` (also
    set inline, computed from the frame's real measured width) shrinks
-   it — this is what makes it fit exactly on any device width instead
+   it - this is what makes it fit exactly on any device width instead
    of only the two viewport breakpoints a fixed CSS scale() could target. */
 .ef-scene-frame {
   position: relative;
@@ -932,7 +932,7 @@
   top: 0; left: 50%;
   width: 1020px;
   height: 340px;
-  margin-left: -510px;   /* half of width — keeps scale-from-center anchored */
+  margin-left: -510px;   /* half of width - keeps scale-from-center anchored */
   transform-origin: top center;
 }
 .ef-scene--compact .ef-machine-label { display: none; }

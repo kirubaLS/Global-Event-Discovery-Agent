@@ -1,10 +1,10 @@
 """
-backend/db.py — thin lead-capture / tracking store (Neon Postgres).
+backend/db.py - thin lead-capture / tracking store (Neon Postgres).
 
 Three tables, written fire-and-forget from the API routes:
-  icp_submissions  — raw ICP form payload + email + IP + device/session ids
-  search_results   — the top-6 events JSON returned for a submission
-  consent_log      — cookie banner / form consent records
+  icp_submissions  - raw ICP form payload + email + IP + device/session ids
+  search_results   - the top-6 events JSON returned for a submission
+  consent_log      - cookie banner / form consent records
 
 Everything here is OPTIONAL: when DATABASE_URL is unset (or asyncpg is
 missing / the DB is down) every function silently no-ops, so the app
@@ -21,11 +21,11 @@ from config import get_settings
 settings = get_settings()
 
 _pool = None          # asyncpg.Pool | None
-_disabled = False     # set True after a fatal init failure — stop retrying
+_disabled = False     # set True after a fatal init failure - stop retrying
 
 
 def _normalise_dsn(url: str) -> str:
-    # Neon/Render give postgres:// or postgresql:// with ?sslmode=require —
+    # Neon/Render give postgres:// or postgresql:// with ?sslmode=require -
     # asyncpg accepts both scheme spellings and the sslmode query param.
     return url.replace("postgresql+asyncpg://", "postgresql://", 1)
 
@@ -36,7 +36,7 @@ async def _get_pool():
         return _pool
     if not settings.database_url:
         _disabled = True
-        logger.info("DATABASE_URL not set — submissions/results are not stored")
+        logger.info("DATABASE_URL not set - submissions/results are not stored")
         return None
     try:
         import asyncpg
@@ -45,7 +45,7 @@ async def _get_pool():
             command_timeout=15,
         )
         await _init_tables(_pool)
-        logger.info("DB connected — lead/tracking storage enabled")
+        logger.info("DB connected - lead/tracking storage enabled")
     except Exception as e:
         logger.warning(f"DB unavailable, storage disabled: {e}")
         _pool, _disabled = None, True

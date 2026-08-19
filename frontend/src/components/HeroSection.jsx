@@ -68,7 +68,7 @@ export default function HeroSection({ onScrollToForm, stats }) {
 
           <motion.div className="ld-hero-actions" variants={rise} custom={4} initial="hidden" animate="show">
             <button className="ds-btn-primary ds-btn-primary--hot" onClick={onScrollToForm} aria-label="Rank my trade shows free - jump to the ICP form">
-              Rank My Trade Shows — it's free <ArrowRight size={17} aria-hidden="true" />
+              Rank My Trade Shows - it's free <ArrowRight size={17} aria-hidden="true" />
             </button>
             <a className="ds-btn-outline" href="#how" aria-label="See how ExpoToFunnel works">See how it works</a>
           </motion.div>

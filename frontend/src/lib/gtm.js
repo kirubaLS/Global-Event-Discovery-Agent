@@ -1,5 +1,5 @@
 /*
-  lib/gtm.js — dataLayer event helper.
+  lib/gtm.js - dataLayer event helper.
 
   GTM (container GTM-NWXF3JLD) and GA4 (gtag.js, G-P3WGC42HZC) are both
   loaded directly in index.html's <head>/<body> - not from here. This

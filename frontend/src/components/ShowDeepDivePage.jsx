@@ -62,7 +62,7 @@ function getICPData(event, profile) {
   return {
     estimate: est, low, high,
     display: `~${est.toLocaleString()}`,
-    range_display: `${low.toLocaleString()} – ${high.toLocaleString()}`,
+    range_display: `${low.toLocaleString()} - ${high.toLocaleString()}`,
     methodology: `Based on ${att.toLocaleString()} total attendees × 35% decision-maker ratio × ${Math.round(density*100)}% ICP density. Range shows ±30% uncertainty.`
   }
 }
