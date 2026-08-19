@@ -92,7 +92,7 @@ export const api = {
   // Polls GET /api/search/status/{job_id} until the job finishes.
   // Resolves with the SearchResponse-shaped result dict, or rejects
   // with an Error (job failed, or polling timed out).
-  pollSearchStatus: async (jobId, { intervalMs = 1500, timeoutMs = 120000 } = {}) => {
+  pollSearchStatus: async (jobId, { intervalMs = 2000, timeoutMs = 300000 } = {}) => {
     const start = Date.now()
     while (Date.now() - start < timeoutMs) {
       const s = await request(`/search/status/${jobId}`)

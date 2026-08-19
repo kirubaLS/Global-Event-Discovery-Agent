@@ -6,6 +6,9 @@ The old pipeline (DB, scrapers, embeddings, queue, analytics, consent)
 is gone. Every stub returns the safe "empty" shape its caller already
 handles gracefully - see frontend/src/api/client.js.
 """
+import asyncio
+import uuid
+
 from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
 from pydantic import BaseModel
@@ -76,26 +79,58 @@ async def search(req: SearchRequest, request: Request):
     if limit_msg:
         raise HTTPException(status_code=429, detail=limit_msg)
 
-    # Cache: identical ICP within TTL → skip the OpenAI call entirely
-    result = await cache.get_cached_search(req.profile)
-    from_cache = result is not None
-    if not from_cache:
-        try:
-            result = await run_gpt_event_search(req.profile)
-        except RuntimeError as e:          # missing API key → clear 503
-            raise HTTPException(status_code=503, detail=str(e))
-        except Exception as e:
-            logger.error(f"GPT event search failed: {e}")
-            raise HTTPException(status_code=500, detail="Search failed - please try again.")
+    # Cache hit → return inline immediately (no waiting, no job).
+    cached = await cache.get_cached_search(req.profile)
+    if cached is not None:
+        sub_id = await db.log_submission(req.profile, ip, device_id, session_id, True)
+        await db.log_search_result(sub_id, cached)
+        return {"status": "done", "job_id": None, "result": cached}
+
+    # Cache miss → run the slow GPT search in the BACKGROUND and return a
+    # job id the frontend polls (api.pollSearchStatus). A synchronous
+    # 2-3 min gpt-5 request is fragile on Render (a redeploy or proxy
+    # timeout strands it mid-flight and the page hangs forever); the
+    # queued pattern survives that — the browser polls a fast status
+    # endpoint instead of holding one long connection open.
+    job_id = str(uuid.uuid4())
+    _JOBS[job_id] = {"status": "processing"}
+    asyncio.create_task(
+        _run_search_job(job_id, dict(req.profile), ip, device_id, session_id)
+    )
+    return {"status": "queued", "job_id": job_id}
+
+
+# In-memory job store (single Render instance — fine for this scale).
+_JOBS: dict = {}
+
+
+async def _run_search_job(job_id: str, profile: dict, ip: str,
+                          device_id: str, session_id: str) -> None:
+    try:
+        result = await run_gpt_event_search(profile)
         if result.get("events"):
-            await cache.set_cached_search(req.profile, result)
+            await cache.set_cached_search(profile, result)
+        sub_id = await db.log_submission(profile, ip, device_id, session_id, False)
+        await db.log_search_result(sub_id, result)
+        _JOBS[job_id] = {"status": "done", "result": result}
+    except RuntimeError as e:               # missing API key
+        _JOBS[job_id] = {"status": "error", "error": str(e)}
+    except Exception as e:
+        logger.error(f"GPT event search failed: {e}")
+        _JOBS[job_id] = {"status": "error", "error": "Search failed - please try again."}
 
-    # Lead capture (Neon Postgres; no-ops when DATABASE_URL unset)
-    sub_id = await db.log_submission(req.profile, ip, device_id, session_id, from_cache)
-    await db.log_search_result(sub_id, result)
 
-    # Same envelope the old queue-less inline path used (App.jsx branches on it)
-    return {"status": "done", "job_id": None, "result": result}
+@router.get("/search/status/{job_id}")
+async def search_status(job_id: str):
+    job = _JOBS.get(job_id)
+    if not job:
+        # Unknown id: the job never existed, or the instance restarted and
+        # lost it. Treat as a retryable error, not a hang.
+        return {"status": "error", "error": "Search expired - please try again."}
+    if job["status"] in ("done", "error"):
+        # Hand it over once, then free the memory.
+        return _JOBS.pop(job_id)
+    return {"status": "processing"}
 
 
 # ── Maintenance + stats ─────────────────────────────────────────────
