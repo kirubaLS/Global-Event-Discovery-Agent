@@ -14,6 +14,9 @@ openai
 # ── Lead capture / tracking (optional - needs DATABASE_URL, Neon Postgres)
 asyncpg
 
+# ── HTTP client (Brevo OTP API, general) ──────────────────────────────
+httpx
+
 # ── Upstash Redis cache + daily rate limit (optional - needs REDIS_URL)
 redis
 
