@@ -147,15 +147,56 @@ async def _init_tables(pool) -> None:
             verified_at TIMESTAMPTZ
         );
         CREATE INDEX IF NOT EXISTS idx_ver_email ON email_verifications (email, created_at DESC);
+        -- Every ICP form field also gets its own column (the full payload
+        -- still lands in `profile` JSONB). ADD COLUMN IF NOT EXISTS keeps
+        -- this safe on databases created before the columns existed.
+        ALTER TABLE icp_submissions
+            ADD COLUMN IF NOT EXISTS target_industries      JSONB,
+            ADD COLUMN IF NOT EXISTS target_personas        JSONB,
+            ADD COLUMN IF NOT EXISTS icp_segments           JSONB,
+            ADD COLUMN IF NOT EXISTS target_geographies     JSONB,
+            ADD COLUMN IF NOT EXISTS preferred_event_types  JSONB,
+            ADD COLUMN IF NOT EXISTS extra_keywords         JSONB,
+            ADD COLUMN IF NOT EXISTS client_names           JSONB,
+            ADD COLUMN IF NOT EXISTS avg_deal_size_category TEXT,
+            ADD COLUMN IF NOT EXISTS public_reference_range TEXT,
+            ADD COLUMN IF NOT EXISTS differentiator_score   INT,
+            ADD COLUMN IF NOT EXISTS date_from              DATE,
+            ADD COLUMN IF NOT EXISTS date_to                DATE;
         CREATE INDEX IF NOT EXISTS idx_subs_created ON icp_submissions (created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_subs_email   ON icp_submissions (email);
         CREATE INDEX IF NOT EXISTS idx_act_session  ON activity_events (session_id, created_at DESC);
         """)
 
 
+def _json_list(value) -> str:
+    """JSONB-safe list: anything non-list becomes []."""
+    return json.dumps(value if isinstance(value, list) else [])
+
+
+def _as_date(value):
+    """'YYYY-MM-DD' → date, anything else → None (column is nullable)."""
+    from datetime import date, datetime
+    if isinstance(value, date):
+        return value
+    try:
+        return datetime.strptime(str(value)[:10], "%Y-%m-%d").date()
+    except Exception:
+        return None
+
+
+def _as_int(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 async def log_submission(profile: dict, ip: str, device_id: str,
                          session_id: str, from_cache: bool) -> Optional[str]:
-    """Store the raw ICP submission; returns submission id (or None)."""
+    """Store the ICP submission: the whole payload as `profile` JSONB
+    plus one explicit column per form field, so every answer is
+    queryable without digging into JSON. Returns submission id (or None)."""
     pool = await _get_pool()
     if not pool:
         return None
@@ -165,14 +206,31 @@ async def log_submission(profile: dict, ip: str, device_id: str,
             await con.execute(
                 """INSERT INTO icp_submissions
                    (id, email, company_name, buyer_description, profile,
-                    ip_address, device_id, session_id, from_cache)
-                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)""",
+                    ip_address, device_id, session_id, from_cache,
+                    target_industries, target_personas, icp_segments,
+                    target_geographies, preferred_event_types, extra_keywords,
+                    client_names, avg_deal_size_category, public_reference_range,
+                    differentiator_score, date_from, date_to)
+                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
+                           $15,$16,$17,$18,$19,$20,$21)""",
                 sub_id,
                 profile.get("email") or "",
                 profile.get("company_name") or "",
                 profile.get("buyer_description") or "",
                 json.dumps(profile),
                 ip, device_id, session_id, from_cache,
+                _json_list(profile.get("target_industries")),
+                _json_list(profile.get("target_personas")),
+                _json_list(profile.get("icp_segments")),
+                _json_list(profile.get("target_geographies")),
+                _json_list(profile.get("preferred_event_types")),
+                _json_list(profile.get("extra_keywords")),
+                _json_list(profile.get("client_names")),
+                profile.get("avg_deal_size_category") or "",
+                profile.get("public_reference_range") or "",
+                _as_int(profile.get("differentiator_score")),
+                _as_date(profile.get("date_from")),
+                _as_date(profile.get("date_to")),
             )
         return sub_id
     except Exception as e:

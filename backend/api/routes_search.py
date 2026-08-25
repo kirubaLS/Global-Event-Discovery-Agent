@@ -191,7 +191,14 @@ def _otp_email_html(code: str) -> str:
 
 
 def otp_sender_configured() -> bool:
-    """OTP delivery order: Brevo HTTP API → SMTP → Resend."""
+    """OTP delivery order: Brevo HTTP API → SMTP → Resend.
+
+    OTP_ENABLED is the master pause switch (config.py): while it is
+    off this returns False, so /search skips the verified-email check
+    and /send-verification tells the form to skip the code step. The
+    sending code below stays wired up and works the moment it's on."""
+    if not settings.otp_enabled:
+        return False
     return bool(settings.brevo_api_key or settings.smtp_host or settings.resend_api_key)
 
 
