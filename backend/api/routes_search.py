@@ -59,7 +59,13 @@ async def search(req: SearchRequest, request: Request):
         if otp_sender_configured():
             verified = await db.is_email_verified(email)
             if verified is False:
-                raise HTTPException(status_code=403, detail="email_not_verified")
+                # Reached only if the form's OTP step was bypassed - the
+                # message is user-facing (App.jsx toasts err.detail), so
+                # it has to read as instructions, not an error code.
+                raise HTTPException(
+                    status_code=403,
+                    detail="Please verify your work email first - "
+                           "we'll email you a 6-digit code.")
 
     ip         = _client_ip(request)
     device_id  = request.headers.get("x-device-id", "")
@@ -193,10 +199,11 @@ def _otp_email_html(code: str) -> str:
 def otp_sender_configured() -> bool:
     """OTP delivery order: Brevo HTTP API → SMTP → Resend.
 
-    OTP_ENABLED is the master pause switch (config.py): while it is
-    off this returns False, so /search skips the verified-email check
-    and /send-verification tells the form to skip the code step. The
-    sending code below stays wired up and works the moment it's on."""
+    OTP_ENABLED (config.py) is the master switch: while it is off this
+    returns False, so /search skips the verified-email check and
+    /send-verification tells the form to skip the code step. With it on
+    (the default), verification is enforced as soon as any sender is
+    configured - no sender still means skip, never a hard block."""
     if not settings.otp_enabled:
         return False
     return bool(settings.brevo_api_key or settings.smtp_host or settings.resend_api_key)
@@ -298,6 +305,12 @@ async def send_verification(req: ValidateEmailRequest, request: Request):
         raise HTTPException(status_code=422, detail=reason)
     if not otp_sender_configured():
         return {"sent": False, "skip": True}   # email infra off → frontend skips OTP
+    # Already verified within the 30-day window /search enforces: don't
+    # make them read a second code for the same mailbox. (The form's own
+    # comment always claimed this; it lives here so it holds across
+    # browsers and sessions, not just within one page load.)
+    if await db.is_email_verified(email):
+        return {"sent": False, "skip": True}
     ip = _client_ip(request)
     if await db.sends_in_last_hour(email, ip) >= 3:
         raise HTTPException(status_code=429,

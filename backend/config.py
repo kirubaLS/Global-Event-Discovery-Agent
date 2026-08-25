@@ -47,13 +47,15 @@ class Settings(BaseSettings):
     search_cache_ttl_seconds: int = 86400   # identical ICP → reuse result 24h
     search_daily_limit: int = 3             # searches per device AND per IP per UTC day (0 = off)
 
-    # ── Email OTP (PAUSED) ─────────────────────────────────────────
-    # Master switch for the proof-of-mailbox step. While False the
-    # /send-verification endpoint reports {"skip": true} and /search
-    # never demands a verified email, so the ICP form submits straight
-    # through. The whole OTP implementation below is kept intact - set
-    # OTP_ENABLED=true (plus a sender) to turn it back on.
-    otp_enabled: bool = False
+    # ── Email OTP ──────────────────────────────────────────────────
+    # Master switch for the proof-of-mailbox step. On (the default) the
+    # ICP form emails a 6-digit code and holds the submit until it's
+    # entered; /search then requires a verified email. A sender must
+    # also be configured below (Brevo / SMTP / Resend) - with none,
+    # /send-verification reports {"skip": true} and the form submits
+    # straight through, so the step can never lock users out. Set
+    # OTP_ENABLED=false to pause it again without touching code.
+    otp_enabled: bool = True
 
     # ── OTP delivery via Brevo HTTP API (works on Render free) ──────
     # Render's free tier blocks outbound SMTP ports (25/465/587) -
