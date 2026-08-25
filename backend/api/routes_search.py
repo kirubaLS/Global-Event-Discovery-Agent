@@ -78,16 +78,20 @@ async def search(req: SearchRequest, request: Request):
     limit_msg = await cache.check_rate_limit(device_id, ip)
     if limit_msg == "redis_down":
         if await db.count_searches_today(ip, device_id) >= settings.search_daily_limit > 0:
-            limit_msg = (f"Daily search limit reached ({settings.search_daily_limit}/day). "
-                         "Try again tomorrow, or contact us for more.")
+            limit_msg = cache.limit_message(settings.search_daily_limit)
         else:
             limit_msg = None
     if limit_msg:
         raise HTTPException(status_code=429, detail=limit_msg)
 
-    # Cache hit → return inline immediately (no waiting, no job).
+    # Cache hit → return inline immediately (no waiting, no job). The
+    # slot check_rate_limit just counted is given back: a cached answer
+    # costs no OpenAI call, so it must not eat one of the 3/day. (Re-
+    # submitting the same ICP - after the OTP step, or via the geo-swap
+    # auto-resubmit - is the common way this happens.)
     cached = await cache.get_cached_search(req.profile)
     if cached is not None:
+        await cache.refund_rate_limit(device_id, ip)
         sub_id = await db.log_submission(req.profile, ip, device_id, session_id, True)
         await db.log_search_result(sub_id, cached)
         return {"status": "done", "job_id": None, "result": cached}
@@ -127,9 +131,13 @@ async def _run_search_job(job_id: str, profile: dict, ip: str,
         await db.log_search_result(sub_id, result)
         await _set_job(job_id, {"status": "done", "result": result})
     except RuntimeError as e:               # missing API key
+        # Nothing was searched - don't charge the day's quota for our
+        # own misconfiguration or failure. Same on the generic path.
+        await cache.refund_rate_limit(device_id, ip)
         await _set_job(job_id, {"status": "error", "error": str(e)})
     except Exception as e:
         logger.error(f"GPT event search failed: {e}")
+        await cache.refund_rate_limit(device_id, ip)
         await _set_job(job_id, {"status": "error", "error": "Search failed - please try again."})
 
 
@@ -209,6 +217,16 @@ def otp_sender_configured() -> bool:
     return bool(settings.brevo_api_key or settings.smtp_host or settings.resend_api_key)
 
 
+def _otp_email_text(code: str) -> str:
+    """Plain-text alternative. An HTML-only transactional mail is a
+    classic spam signal (SpamAssassin MIME_HTML_ONLY) - every real
+    provider sends multipart, so we do too."""
+    return (f"Your ExpoToFunnel verification code is {code}.\n\n"
+            "Enter it on the site to see your event ranking. "
+            "The code expires in 10 minutes.\n\n"
+            "If you didn't request it, you can ignore this email.\n")
+
+
 async def _send_otp_brevo(to: str, code: str) -> None:
     """Brevo transactional-email HTTP API - port 443, so it works on
     Render's free tier where outbound SMTP ports are blocked."""
@@ -222,8 +240,15 @@ async def _send_otp_brevo(to: str, code: str) -> None:
             json={
                 "sender": {"name": "ExpoToFunnel", "email": sender},
                 "to": [{"email": to}],
+                "replyTo": {"name": "ExpoToFunnel", "email": sender},
                 "subject": f"{code} is your ExpoToFunnel verification code",
                 "htmlContent": _otp_email_html(code),
+                # Both parts, so the message is multipart rather than
+                # HTML-only, and a transactional class header so filters
+                # don't score it as bulk marketing.
+                "textContent": _otp_email_text(code),
+                "headers": {"X-Entity-Ref-ID": "expotofunnel-otp",
+                            "Auto-Submitted": "auto-generated"},
             },
         )
         r.raise_for_status()
@@ -242,8 +267,7 @@ def _send_otp_smtp(to: str, code: str) -> None:
     msg["Subject"] = f"{code} is your ExpoToFunnel verification code"
     msg["From"] = f"ExpoToFunnel <{sender}>"
     msg["To"] = to
-    msg.attach(MIMEText(f"Your ExpoToFunnel verification code is {code}. "
-                        "It expires in 10 minutes.", "plain"))
+    msg.attach(MIMEText(_otp_email_text(code), "plain"))
     msg.attach(MIMEText(_otp_email_html(code), "html"))
 
     if int(settings.smtp_port) == 465:
@@ -263,8 +287,10 @@ def _send_otp_resend(to: str, code: str) -> None:
     resend.Emails.send({
         "from": f"ExpoToFunnel <{settings.resend_from_email}>",
         "to": [to],
+        "reply_to": settings.resend_from_email,
         "subject": f"{code} is your ExpoToFunnel verification code",
         "html": _otp_email_html(code),
+        "text": _otp_email_text(code),
     })
 
 

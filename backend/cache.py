@@ -114,8 +114,27 @@ async def set_json(key: str, value, ttl_seconds: int = 604800) -> None:
 
 # ── Daily rate limit ────────────────────────────────────────────────
 
-_LIMIT_MSG = ("Daily search limit reached ({n}/day). "
-              "Try again tomorrow, or contact us for more.")
+# The cap counts the network as well as the browser, so colleagues
+# behind one office IP share it - say so, otherwise "you've used 3"
+# reads as a bug to someone on their first search of the day.
+_LIMIT_MSG = ("Daily search limit reached ({n}/day, counted per browser "
+              "and per network). Try again tomorrow, or contact us for more.")
+
+
+def limit_message(n: int) -> str:
+    """The one wording for "you're out of searches", shared with the
+    Postgres fallback path in routes_search."""
+    return _LIMIT_MSG.format(n=n)
+
+
+def _limit_keys(device_id: str, ip: str) -> list:
+    day = datetime.now(timezone.utc).strftime("%Y%m%d")
+    keys = []
+    if ip:
+        keys.append(f"rl:{day}:ip:{ip}")
+    if device_id:
+        keys.append(f"rl:{day}:dev:{device_id}")
+    return keys or [f"rl:{day}:anon"]
 
 
 async def check_rate_limit(device_id: str, ip: str) -> Optional[str]:
@@ -134,22 +153,41 @@ async def check_rate_limit(device_id: str, ip: str) -> Optional[str]:
     client = await _get_client()
     if not client:
         return "redis_down"          # sentinel: caller uses the DB fallback
-    day = datetime.now(timezone.utc).strftime("%Y%m%d")
-    keys = []
-    if ip:
-        keys.append(f"rl:{day}:ip:{ip}")
-    if device_id:
-        keys.append(f"rl:{day}:dev:{device_id}")
-    if not keys:
-        keys.append(f"rl:{day}:anon")
     try:
-        for key in keys:
+        counted = []
+        for key in _limit_keys(device_id, ip):
             n = await client.incr(key)
             if n == 1:
                 await client.expire(key, 86400)
+            counted.append(key)
             if n > limit:
+                # Hand back everything this blocked attempt counted -
+                # otherwise retrying against a limit that already said
+                # no keeps inflating the counter past it, and a later
+                # legitimate refund can never catch up.
+                for k in counted:
+                    await client.decr(k)
                 return _LIMIT_MSG.format(n=limit)
     except Exception as e:
         logger.warning(f"rate limit check failed: {e}")
         return "redis_down"
     return None
+
+
+async def refund_rate_limit(device_id: str, ip: str) -> None:
+    """Give back a slot counted by check_rate_limit for a search that
+    never actually ran - a cache hit (costs nothing) or a search that
+    failed. Without this a user burns their 3/day on results they were
+    handed from cache or on our own errors. Floors at 0 so a stray
+    refund can't mint free searches."""
+    if settings.search_daily_limit <= 0:
+        return
+    client = await _get_client()
+    if not client:
+        return
+    try:
+        for key in _limit_keys(device_id, ip):
+            if await client.decr(key) < 0:
+                await client.set(key, 0, ex=86400)
+    except Exception as e:
+        logger.warning(f"rate limit refund failed: {e}")
