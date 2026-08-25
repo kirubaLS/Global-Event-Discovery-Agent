@@ -107,12 +107,13 @@ const DEAL_BRACKETS = [
   },
 ]
 
-// ── Email OTP: PAUSED ────────────────────────────────────────────
-// The proof-of-mailbox step is switched off for now, so the form
-// submits straight to the search. All the OTP code below (send,
-// verify, resend, the code input) is left intact - flip this to true
-// (and set OTP_ENABLED=true on the backend) to bring it back.
-const OTP_ENABLED = false
+// ── Email OTP ────────────────────────────────────────────────────
+// Proof-of-mailbox: submit emails a 6-digit code and holds the search
+// until it's entered (see handleSubmit / handleVerifyOtp). Must match
+// OTP_ENABLED on the backend; when the backend has no email sender
+// configured it answers {skip:true} and this step is bypassed at
+// runtime, so the form still works. Set to false to pause the step.
+const OTP_ENABLED = true
 
 // Buyer text parsing is LLM-only now (POST /api/parse-icp) - the old
 // hardcoded keyword→industry map was removed so the model reads the
