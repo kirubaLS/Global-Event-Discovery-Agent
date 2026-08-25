@@ -107,6 +107,13 @@ const DEAL_BRACKETS = [
   },
 ]
 
+// ── Email OTP: PAUSED ────────────────────────────────────────────
+// The proof-of-mailbox step is switched off for now, so the form
+// submits straight to the search. All the OTP code below (send,
+// verify, resend, the code input) is left intact - flip this to true
+// (and set OTP_ENABLED=true on the backend) to bring it back.
+const OTP_ENABLED = false
+
 // Buyer text parsing is LLM-only now (POST /api/parse-icp) - the old
 // hardcoded keyword→industry map was removed so the model reads the
 // user's exact wording (any role, any industry, any abbreviation).
@@ -149,7 +156,6 @@ export default function ICPForm({
 
   const [companyName,    setCompanyName]    = useState('')
   const [diffScore,      setDiffScore]      = useState(5)      // differentiator 1 - 10
-  const [clientRange,    setClientRange]    = useState('')     // client count range
   const [refRange,       setRefRange]       = useState('')     // publicly referenceable clients
   const [clientNames,   setClientNames]   = useState([])   // array of company name strings
   const [clientNameInput, setClientNameInput] = useState('')
@@ -381,7 +387,6 @@ export default function ICPForm({
         buyer_description:      buyer,
         extra_keywords:         extra_keywords || [],
         differentiator_score:   diffScore,
-        client_count_range:     clientRange || '11-50',
         public_reference_range: refRange || '',
         client_names:           clientNameInput.trim() && !clientNames.includes(clientNameInput.trim())
           ? [...clientNames, clientNameInput.trim()]
@@ -393,7 +398,7 @@ export default function ICPForm({
       }
       onSubmit(profile, email)
     }
-  }, [geos, buyer, dealSize, email, diffScore, clientRange, clientNames, clientNameInput, companyName, onSubmit, effectiveParse])
+  }, [geos, buyer, dealSize, email, diffScore, clientNames, clientNameInput, companyName, onSubmit, effectiveParse])
 
   // refocus defaults to true (Enter / comma / Add button - user is adding
   // another name right after). Blur means the user is intentionally moving
@@ -417,7 +422,6 @@ export default function ICPForm({
     // not be treated as missing here.
     if (!geos.length && !geoSearch.trim()) e.geos = 'Select at least one geography'
     if (!dealSize)         e.deal  = 'Select your typical deal value'
-    if (!clientRange)      e.client = 'Select your client count range'
     if (!email.trim())     e.email = 'Work email required'
     else if (!email.includes('@')) e.email = 'Enter a valid email address'
     else if (isFreeEmailDomain(email)) e.email = 'Please use your company work email, not a personal address (e.g. Gmail, Yahoo)'
@@ -484,7 +488,7 @@ export default function ICPForm({
     // it's entered. A fake mailbox at a real company never receives the
     // code, so it can never pass. Verified emails skip this (30 days,
     // enforced server-side; verifiedEmailRef skips it within the session).
-    if (verifiedEmailRef.current !== email.trim().toLowerCase() && otpStage !== 'verified') {
+    if (OTP_ENABLED && verifiedEmailRef.current !== email.trim().toLowerCase() && otpStage !== 'verified') {
       try {
         const sent = await api.sendVerification(email.trim())
         if (sent.skip) {
@@ -540,7 +544,6 @@ export default function ICPForm({
       buyer_description:    buyer,
       extra_keywords:       extra_keywords || [],
       differentiator_score: diffScore,
-      client_count_range:   clientRange || "11-50",
       public_reference_range: refRange || '',
       client_names:         finalClientNames,
       email,
@@ -874,38 +877,7 @@ export default function ICPForm({
         </div>
       </fieldset>
 
-      {/* Field 6: Client count range */}
-      <fieldset className="icp-field-group">
-        <legend className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
-          How many unique clients have you served?
-          <span className="icp-required">*</span>
-        </legend>
-        <p className="icp-hint" id="icp-clients-help">Helps us calibrate proof and credibility for outreach</p>
-        <div className="icp-client-grid" role="radiogroup" aria-label="Client count range" aria-describedby="icp-clients-help">
-          {[
-            { v:'0-10',   l:'0  -  10',     s:'Early stage  -  niche ICP focus needed' },
-            { v:'11-50',  l:'11  -  50',    s:'Early traction  -  usable credibility'  },
-            { v:'51-200', l:'51  -  200',   s:'Proven  -  solid proof base'            },
-            { v:'201-500',l:'201  -  500',  s:'Strong  -  enterprise-ready'            },
-            { v:'500+',   l:'500+',       s:'Established  -  maximum credibility'    },
-          ].map(opt => (
-            <button
-              key={opt.v}
-              role="radio"
-              aria-checked={clientRange === opt.v}
-              type="button"
-              className={`icp-client-option ${clientRange === opt.v ? 'selected' : ''}`}
-              onClick={() => setClientRange(opt.v)}
-            >
-              <span className="icp-client-count">{opt.l}</span>
-              <span className="icp-client-sub">{opt.s}</span>
-            </button>
-          ))}
-        </div>
-        {errors.client && <p className="icp-error">{errors.client}</p>}
-      </fieldset>
-
-      {/* Field 6b: Publicly referenceable clients (drives outreach effort) */}
+      {/* Field 6: Publicly referenceable clients (drives outreach effort) */}
       <fieldset className="icp-field-group">
         <legend className={heroMode ? 'icp-label icp-label--hero' : 'icp-label'}>
           How many client names can you publicly reference?
@@ -1022,7 +994,7 @@ export default function ICPForm({
           />
         </div>
         {errors.email && <p className="icp-error">{errors.email}</p>}
-        {otpStage === 'sent' && (
+        {OTP_ENABLED && otpStage === 'sent' && (
           <div style={{ marginTop: 10, padding: '14px 16px', background: 'rgba(14,124,107,0.06)',
                         border: '1.5px solid rgba(14,124,107,0.35)', borderRadius: 10 }}>
             <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: '#0E7C6B' }}>

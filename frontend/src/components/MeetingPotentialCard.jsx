@@ -111,9 +111,11 @@ export default function MeetingPotentialCard({ data, eventName = '', compact = f
           <div className="mp-pos-diff">
             Differentiator: {positioning?.differentiator_score}/10
           </div>
-          <div className="mp-pos-proof">
-            Clients: {positioning?.client_count_range}
-          </div>
+          {positioning?.client_count_range && (
+            <div className="mp-pos-proof">
+              Clients: {positioning.client_count_range}
+            </div>
+          )}
         </div>
       </div>
 

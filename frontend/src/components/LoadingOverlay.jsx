@@ -30,12 +30,13 @@ function calcProbability(profile) {
   else if (diff >= 6) score += 7
   else if (diff >= 4) score += 3
 
-  // Client count range - proof / credibility signal
-  const cr = profile.client_count_range || ''
-  if (cr === '500+')    score += 8
-  else if (cr === '201-500') score += 6
-  else if (cr === '51-200')  score += 4
-  else if (cr === '11-50')   score += 2
+  // Publicly referenceable clients - proof / credibility signal
+  // (replaced the removed "unique clients served" field)
+  const rr = profile.public_reference_range || ''
+  if (rr === '20+')    score += 8
+  else if (rr === '11-20') score += 6
+  else if (rr === '6-10')  score += 4
+  else if (rr === '1-5')   score += 2
 
   // Focused ICP (fewer, sharper industries = higher conversion)
   const inds = (profile.target_industries || []).length
@@ -66,7 +67,7 @@ function buildTips(profile, eventsLabel) {
   const geos  = profile.target_geographies || []
   const ds    = profile.avg_deal_size_category || 'medium'
   const diff  = Number(profile.differentiator_score) || 5
-  const cr    = profile.client_count_range || ''
+  const rr    = profile.public_reference_range || ''
 
   if (inds.length)
     tips.push(`Scanning events in ${inds.slice(0, 2).join(' & ')} for your ICP…`)
@@ -87,10 +88,10 @@ function buildTips(profile, eventsLabel) {
   else if (diff <= 4)
     tips.push('Tip: A tighter ICP message converts floor conversations 3× faster.')
 
-  // Client range / credibility
-  if (cr === '500+' || cr === '201-500')
-    tips.push('Your client base gives you strong social proof for outreach at these shows.')
-  else if (cr === '0-10')
+  // Referenceable clients / credibility
+  if (rr === '20+' || rr === '11-20')
+    tips.push('Your reference list gives you strong social proof for outreach at these shows.')
+  else if (rr === '0')
     tips.push('Focused niching at one or two shows first builds proof for larger events.')
 
   // Always-on pipeline tips
