@@ -105,6 +105,26 @@ legend.icp-label {
   padding: 0;
   width: 100%;
 }
+/* Breathing room above every field group. Declared after the fieldset
+   reset above (which zeroes margin/padding) so it applies to the
+   <fieldset> groups too, and set in one place so both the card layout
+   (.icp-fields) and the hero layout (.icp-hero-fields) get it. */
+.icp-field-group,
+fieldset.icp-field-group {
+  padding-top: 14px;
+}
+/* ...except the first one - the header/label above it already spaces it. */
+.icp-fields > .icp-field-group:first-child,
+.icp-hero-fields > .icp-field-group:first-child {
+  padding-top: 0;
+}
+/* Hero layout had no stacking rule of its own, so its groups ran
+   together; match the card layout's column gap. */
+.icp-hero-fields {
+  display:        flex;
+  flex-direction: column;
+  gap:            22px;
+}
 .icp-label {
   font-size:   13px;
   font-weight: 600;
