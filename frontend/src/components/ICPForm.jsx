@@ -498,7 +498,7 @@ export default function ICPForm({
         } else {
           setOtpStage('sent')
           setOtpError('')
-          toast('📬 We emailed you a 6-digit code - enter it below to see your ranking.', { duration: 6000 })
+          toast('📬 We emailed you a 6-digit code - enter it below to see your ranking. Not there? Check your spam folder.', { duration: 6000 })
           requestAnimationFrame(() => {
             document.getElementById('icp-otp-input')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
             document.getElementById('icp-otp-input')?.focus()
@@ -1026,6 +1026,15 @@ export default function ICPForm({
                        fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
               Didn't get it? Resend code
             </button>
+            {/* Codes land in spam often enough that not saying so reads
+                as "the email never came". Contact is the way out when
+                it genuinely didn't. */}
+            <p style={{ marginTop: 8, marginBottom: 0, fontSize: 12, lineHeight: 1.5, color: '#8A959C' }}>
+              Not in your inbox? Check your <strong style={{ color: '#4B5A63', fontWeight: 600 }}>spam
+              or junk folder</strong> - it can take a minute to arrive. Still stuck?{' '}
+              <a href="/contact" target="_blank" rel="noopener noreferrer"
+                 style={{ color: '#0E7C6B', fontWeight: 600 }}>Contact us</a>.
+            </p>
           </div>
         )}
         <p className="icp-privacy">🔒 No spam. Your email is only used to send the event report.</p>

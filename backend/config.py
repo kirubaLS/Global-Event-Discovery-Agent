@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     # straight through, so the step can never lock users out. Set
     # OTP_ENABLED=false to pause it again without touching code.
     otp_enabled: bool = True
+    # How long a verified mailbox stays verified. Inside this window the
+    # form skips the code step and /search accepts the email outright.
+    # Set OTP_REVERIFY_DAYS=0 to demand a fresh code on every search -
+    # useful for testing the flow, since your own address otherwise
+    # skips it for a month after the first success.
+    otp_reverify_days: int = 30
 
     # ── OTP delivery via Brevo HTTP API (works on Render free) ──────
     # Render's free tier blocks outbound SMTP ports (25/465/587) -

@@ -431,8 +431,15 @@ async def check_verification_code(email: str, code_hash: str,
         return "unavailable"
 
 
-async def is_email_verified(email: str, within_days: int = 30) -> Optional[bool]:
-    """True/False, or None when storage is unavailable (fail open)."""
+async def is_email_verified(email: str, within_days: Optional[int] = None) -> Optional[bool]:
+    """True/False, or None when storage is unavailable (fail open).
+
+    within_days defaults to OTP_REVERIFY_DAYS; 0 means a past
+    verification never counts, so every search needs a fresh code."""
+    if within_days is None:
+        within_days = settings.otp_reverify_days
+    if within_days <= 0:
+        return False
     pool = await _get_pool()
     if not pool:
         return None
