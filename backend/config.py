@@ -84,7 +84,7 @@ class Settings(BaseSettings):
 
     # ── Email report (Resend) ─────────────────────────────────────
     resend_api_key: str = ""
-    resend_from_email: str = "kirubakaran.p@leadstrategus.com"
+    resend_from_email: str = "reports@expotofunnel.com"
 
     class Config:
         env_file = ".env"
