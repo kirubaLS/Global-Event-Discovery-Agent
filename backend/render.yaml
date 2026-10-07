@@ -64,7 +64,7 @@ services:
       - key: RESEND_API_KEY
         sync: false
       - key: RESEND_FROM_EMAIL
-        value: reports@leadstrategus.com
+        value: reports@expotofunnel.com
 
       # ── Frontend / CORS ───────────────────────────────────────────
       - key: FRONTEND_ORIGIN

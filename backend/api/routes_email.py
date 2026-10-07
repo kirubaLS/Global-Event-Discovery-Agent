@@ -400,7 +400,7 @@ def _send_email(to: str, pdf_bytes: bytes, company_name: str) -> None:
         if not resend.api_key:
             raise ValueError("RESEND_API_KEY not configured in .env")
 
-        from_addr = settings.resend_from_email or "reports@leadstrategus.com"
+        from_addr = settings.resend_from_email or "reports@expotofunnel.com"
         subject   = f"ExpoToFunnel Event Intelligence Report - {company_name or 'Your Company'}"
 
         # Encode PDF as base64 for attachment
