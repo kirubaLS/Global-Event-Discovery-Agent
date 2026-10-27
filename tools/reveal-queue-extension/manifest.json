@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Reveal Queue (EasyLeadz helper)",
+  "version": "0.1.0",
+  "description": "Walks a list of LinkedIn profiles, captures what the EasyLeadz extension reveals, and exports it as CSV.",
+  "permissions": ["storage", "clipboardRead"],
+  "host_permissions": ["https://www.linkedin.com/*"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "Open reveal queue" },
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/in/*"],
+      "js": ["shared.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

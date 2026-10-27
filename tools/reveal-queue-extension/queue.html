@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reveal Queue</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --text: #1b1f24; --muted: #667085; --border: #d9dde3;
+    --accent: #0a66c2; --ok: #157f3b; --warn: #b54708; --bad: #b42318;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111418; --card: #1a1f25; --text: #e6e9ed; --muted: #98a2b3; --border: #2e353d;
+            --accent: #4b9bf0; --ok: #4cc77a; --warn: #f0a052; --bad: #f07a70; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .muted { color: var(--muted); }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin: 12px 0; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  textarea, input[type=text] { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px; font: inherit; }
+  textarea { min-height: 90px; resize: vertical; margin-top: 8px; }
+  button { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 12px; font: inherit; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+  .stat b { display: block; font-size: 20px; }
+  .s-found { color: var(--ok); } .s-email_only { color: var(--warn); } .s-no_data, .s-skipped { color: var(--bad); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  td { border-top: 1px solid var(--border); padding: 4px; word-break: break-all; }
+</style>
+</head>
+<body>
+<main>
+  <h1>LinkedIn → EasyLeadz reveal queue</h1>
+  <div class="muted">Press Start: profiles open one by one. On each, click Reveal in EasyLeadz — the phone/email is captured and the next profile opens automatically.</div>
+
+  <section class="card">
+    <b>1. Load your list</b>
+    <div class="muted">Upload a CSV, or copy rows from Google Sheets and paste them. Anything containing linkedin.com/in/ URLs works.</div>
+    <div class="row" style="margin-top:8px"><input type="file" id="file" accept=".csv,.tsv,.txt"></div>
+    <textarea id="paste" placeholder="…or paste rows / URLs here"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button class="primary" id="loadBtn">Add to queue</button>
+      <span class="muted" id="importMsg"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="stats">
+      <div class="stat"><b id="stTotal">0</b><span class="muted">in list</span></div>
+      <div class="stat"><b id="stPending">0</b><span class="muted">pending</span></div>
+      <div class="stat"><b id="stFound">0</b><span class="muted">phones found</span></div>
+      <div class="stat"><b id="stCredits">0 / 170</b><span class="muted">credits today</span></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="primary" id="startBtn">Start</button>
+      <button id="pauseBtn">Pause</button>
+      <label class="muted">Daily cap <input type="text" id="cap" style="width:70px"></label>
+      <span id="runMsg" class="muted"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <b>Export</b>
+    <div class="row" style="margin-top:8px">
+      <button class="primary" id="exportBtn">Download CSV</button>
+      <button id="exportFoundBtn">Found only</button>
+      <button id="retryBtn">Retry skipped</button>
+      <button id="clearBtn">Clear everything</button>
+    </div>
+    <table id="recent" style="margin-top:8px"></table>
+  </section>
+</main>
+<script src="shared.js"></script>
+<script src="queue.js"></script>
+</body>
+</html>
