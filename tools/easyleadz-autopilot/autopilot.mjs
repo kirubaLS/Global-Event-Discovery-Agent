@@ -179,6 +179,40 @@ async function clickViewContact(cdp) {
   return true;
 }
 
+// ---------- LinkedIn push-back ----------
+// Any of these means LinkedIn wants you to slow down or prove you're you.
+// The run stops immediately so you can deal with it by hand.
+const BLOCK_URL = /^\/(checkpoint|authwall|captcha|uas\/login|login|signup)\b/i;
+const BLOCK_TEXT = [
+  /security (check|verification)/i,
+  /verify (that )?you('| a)re (a )?human/i,
+  /unusual activity/i,
+  /commercial use limit/i,
+  /temporarily restricted|restricted your account|account (has been |is )?restricted/i,
+  /too many requests/i,
+  /sign in to view|join linkedin to view|sign in to continue/i,
+];
+const NOT_FOUND_TEXT = /this page doesn.t exist|profile (is )?not available|page not found/i;
+
+async function linkedinState(tab) {
+  const until = Date.now() + 15000;
+  let page;
+  while (Date.now() < until) {
+    try {
+      page = await tab.eval(`({ url: location.href, ready: document.readyState,
+        text: (document.body ? document.body.innerText : '').slice(0, 6000) })`);
+      if (page.ready !== 'loading' && page.text.trim()) break;
+    } catch (e) { /* page mid-navigation */ }
+    await sleep(1000);
+  }
+  if (!page) return { kind: 'block', why: 'LinkedIn page did not load' };
+  if (BLOCK_URL.test(new URL(page.url).pathname)) return { kind: 'block', why: `redirected to ${page.url}` };
+  const hit = BLOCK_TEXT.find(re => re.test(page.text));
+  if (hit) return { kind: 'block', why: `page says "${page.text.match(hit)[0]}"` };
+  if (NOT_FOUND_TEXT.test(page.text)) return { kind: 'not_found' };
+  return { kind: 'ok' };
+}
+
 const remainingCredits = text => {
   const m = text.match(/Credits[\s:]*?(\d+)/i);
   return m ? parseInt(m[1], 10) : null;
@@ -284,36 +318,49 @@ async function main() {
     if (phonesThisRun >= MAX) { log(`Reached --max ${MAX}. Stopping.`); break; }
     log(`[${n + 1}/${todo.length}] ${lead.url}`);
     await tab.send('Page.navigate', { url: lead.url });
-
-    // Wait for the panel to switch to this profile (its text changes from the last one).
-    let panel = null;
-    const until = Date.now() + PANEL_TIMEOUT;
     await sleep(3000);
-    while (Date.now() < until) {
-      panel?.cdp.close();
-      panel = await panelText();
-      if (panel && panel.text !== lastText && /View contact|\+\*|\d{5}/i.test(panel.text)) break;
-      await sleep(1000);
+
+    const li = await linkedinState(tab);
+    if (li.kind === 'block') {
+      // Nothing is written for this profile, so the next run retries it.
+      console.error(`\n*** STOPPED: LinkedIn push-back — ${li.why}.\n` +
+        `*** Handle it by hand in the Chrome window, then give the account a break (a day is safest)\n` +
+        `*** before running again, ideally with a lower --max / --per-minute.`);
+      tab.close();
+      process.exit(2);
     }
-    if (!panel) throw new Error('Lost the EasyLeadz side panel — is it still open?');
 
-    const credits = remainingCredits(panel.text);
-    if (credits === 0) { log('EasyLeadz shows 0 credits. Stopping.'); panel.cdp.close(); break; }
-
-    let text = panel.text;
-    if (!extractPhones(text).length && await clickViewContact(panel.cdp)) {
-      const revealUntil = Date.now() + REVEAL_TIMEOUT;
-      while (Date.now() < revealUntil) {
+    // Dead profile: record it and move on without touching EasyLeadz.
+    let text = '';
+    if (li.kind !== 'not_found') {
+      // Wait for the panel to switch to this profile (its text changes from the last one).
+      let panel = null;
+      const until = Date.now() + PANEL_TIMEOUT;
+      while (Date.now() < until) {
+        panel?.cdp.close();
+        panel = await panelText();
+        if (panel && panel.text !== lastText && /View contact|\+\*|\d{5}/i.test(panel.text)) break;
         await sleep(1000);
-        text = await panel.cdp.eval('document.body.innerText');
-        if (extractPhones(text).length) break;
       }
+      if (!panel) throw new Error('Lost the EasyLeadz side panel — is it still open?');
+
+      if (remainingCredits(panel.text) === 0) { log('EasyLeadz shows 0 credits. Stopping.'); panel.cdp.close(); break; }
+
+      text = panel.text;
+      if (!extractPhones(text).length && await clickViewContact(panel.cdp)) {
+        const revealUntil = Date.now() + REVEAL_TIMEOUT;
+        while (Date.now() < revealUntil) {
+          await sleep(1000);
+          text = await panel.cdp.eval('document.body.innerText');
+          if (extractPhones(text).length) break;
+        }
+      }
+      panel.cdp.close();
+      lastText = text;
     }
-    panel.cdp.close();
-    lastText = text;
 
     const phones = extractPhones(text), emails = extractEmails(text);
-    const status = phones.length ? 'found' : emails.length ? 'email_only' : 'no_data';
+    const status = li.kind === 'not_found' ? 'profile_not_found' : phones.length ? 'found' : emails.length ? 'email_only' : 'no_data';
     if (phones.length) phonesThisRun++;
     const rec = { url: lead.url, phone: phones.join(' / '), email: emails.join(' / '), status,
       revealed_at: new Date().toISOString(), source: SOURCE };

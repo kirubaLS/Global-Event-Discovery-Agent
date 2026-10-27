@@ -71,10 +71,22 @@ If a sheet write fails (network blip) it's kept in
 It also stops when the panel shows 0 credits. At 3/min, 170 profiles take
 about an hour.
 
+## Safety stop
+After opening each profile the script checks what LinkedIn actually showed.
+It **stops immediately** (exit code 2, nothing recorded for that profile) if
+LinkedIn redirects to a checkpoint / login / authwall page, or shows a
+security check, CAPTCHA, "unusual activity", commercial-use-limit or
+account-restricted message. Deal with it by hand in the Chrome window and
+give the account a rest — a day is safest — before running again with a
+lower `--max` / `--per-minute`. Volume is what protects the account most.
+
+Profiles that no longer exist are marked `profile_not_found` without
+touching EasyLeadz (no credit used).
+
 ## Notes
 - The debugging port lets any program on your computer control that Chrome
   window. Close it when you're not running the autopilot, and don't use that
   profile for anything else.
 - Profiles where EasyLeadz has no contact take ~25 s (the script waits for the
   panel to change before concluding "no data").
-- Status values: `found` (phone), `email_only`, `no_data`.
+- Status values: `found` (phone), `email_only`, `no_data`, `profile_not_found`.
