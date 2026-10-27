@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reveal Queue</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --text: #1b1f24; --muted: #667085; --border: #d9dde3;
+    --accent: #0a66c2; --ok: #157f3b; --warn: #b54708; --bad: #b42318;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111418; --card: #1a1f25; --text: #e6e9ed; --muted: #98a2b3; --border: #2e353d;
+            --accent: #4b9bf0; --ok: #4cc77a; --warn: #f0a052; --bad: #f07a70; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .muted { color: var(--muted); }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin: 12px 0; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  textarea, input[type=text] { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px; font: inherit; }
+  textarea { min-height: 90px; resize: vertical; }
+  button { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 12px; font: inherit; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+  .stat b { display: block; font-size: 20px; }
+  .url { word-break: break-all; font-weight: 600; }
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  @media (max-width: 520px) { .fields { grid-template-columns: 1fr; } }
+  .cap-hit { color: var(--bad); font-weight: 600; }
+  kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font-size: 12px; }
+  .s-found { color: var(--ok); } .s-email_only { color: var(--warn); } .s-no_data { color: var(--bad); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  td { border-top: 1px solid var(--border); padding: 4px; word-break: break-all; }
+</style>
+</head>
+<body>
+<main>
+  <h1>LinkedIn → EasyLeadz reveal queue</h1>
+  <div class="muted">Opens each profile for you; you click the EasyLeadz extension and paste what it shows. Progress is saved in this browser.</div>
+
+  <section class="card" id="importCard">
+    <b>1. Load your list</b>
+    <div class="muted">Upload a CSV, or copy the column straight from Google Sheets and paste it below. Any text containing linkedin.com/in/ URLs works.</div>
+    <div class="row" style="margin-top:8px">
+      <input type="file" id="file" accept=".csv,.tsv,.txt">
+    </div>
+    <textarea id="paste" placeholder="…or paste rows / URLs here"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button class="primary" id="loadBtn">Add to queue</button>
+      <button id="clearBtn">Clear everything</button>
+      <span class="muted" id="importMsg"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="stats">
+      <div class="stat"><b id="stTotal">0</b><span class="muted">in list</span></div>
+      <div class="stat"><b id="stPending">0</b><span class="muted">pending</span></div>
+      <div class="stat"><b id="stFound">0</b><span class="muted">phones found</span></div>
+      <div class="stat"><b id="stCredits">0 / 170</b><span class="muted">credits today</span></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <label class="muted">Daily cap <input type="text" id="cap" style="width:70px" value="170"></label>
+    </div>
+  </section>
+
+  <section class="card" id="workCard">
+    <b>2. Reveal</b>
+    <div id="current" style="margin-top:8px"></div>
+    <textarea id="dump" placeholder="Paste the EasyLeadz panel text here (phone + email are pulled out automatically)"></textarea>
+    <div class="fields">
+      <input type="text" id="phone" placeholder="Mobile (+91…)">
+      <input type="text" id="email" placeholder="Email">
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button id="openBtn">Open profile <kbd>Alt+O</kbd></button>
+      <button class="primary" id="saveBtn">Save &amp; next <kbd>Ctrl+Enter</kbd></button>
+      <button id="noDataBtn">No data <kbd>Alt+N</kbd></button>
+      <button id="skipBtn">Skip <kbd>Alt+S</kbd></button>
+    </div>
+    <div class="muted" id="capMsg" style="margin-top:6px"></div>
+  </section>
+
+  <section class="card">
+    <b>3. Export</b>
+    <div class="row" style="margin-top:8px">
+      <button class="primary" id="exportBtn">Download CSV</button>
+      <button id="exportFoundBtn">Download found only</button>
+    </div>
+    <table id="recent" style="margin-top:8px"></table>
+  </section>
+</main>
+
+<script>
+const KEY = 'revealQueue.v1';
+const SOURCE = 'EasyLeadz LinkedIn extension';
+
+let state = load();
+
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if (s && Array.isArray(s.rows)) return s;
+  } catch (e) {}
+  return { rows: [], columns: [], cap: 170, idx: 0 };
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+}
+const today = () => new Date().toISOString().slice(0, 10);
+
+// ---------- parsing ----------
+function parseDelimited(text) {
+  const delim = (text.split('\n')[0].match(/\t/g) || []).length > (text.split('\n')[0].match(/,/g) || []).length ? '\t' : ',';
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (c === '"') q = false;
+      else cell += c;
+    } else if (c === '"') q = true;
+    else if (c === delim) { row.push(cell); cell = ''; }
+    else if (c === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+    else if (c !== '\r') cell += c;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter(r => r.some(v => v.trim()));
+}
+
+function normalizeUrl(u) {
+  const m = String(u).match(/linkedin\.com\/in\/([^/?#\s"',]+)/i);
+  if (!m) return null;
+  let slug = m[1];
+  try { slug = decodeURIComponent(slug); } catch (e) {}
+  return 'https://www.linkedin.com/in/' + slug.toLowerCase() + '/';
+}
+
+function importText(text) {
+  const table = parseDelimited(text);
+  if (!table.length) return 0;
+  // Header row = first row with no LinkedIn URL in it.
+  const hasHeader = !table[0].some(v => normalizeUrl(v));
+  const header = hasHeader ? table[0].map(h => h.trim() || 'col') : table[0].map((_, i) => 'col' + (i + 1));
+  const body = hasHeader ? table.slice(1) : table;
+  const urlCol = header.findIndex((_, i) => body.some(r => normalizeUrl(r[i] || '')));
+
+  for (const h of header) if (!state.columns.includes(h)) state.columns.push(h);
+  const seen = new Set(state.rows.map(r => r.url));
+  let added = 0;
+
+  for (const r of body) {
+    // Fall back to scanning the whole row if the URL column is inconsistent.
+    const url = normalizeUrl(urlCol >= 0 ? r[urlCol] || '' : '') || r.map(normalizeUrl).find(Boolean);
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    const orig = {};
+    header.forEach((h, i) => { orig[h] = (r[i] || '').trim(); });
+    state.rows.push({ url, orig, status: 'pending', phone: '', email: '', revealed_at: '' });
+    added++;
+  }
+  save();
+  return added;
+}
+
+// Indian mobiles: optional +91/91/0 prefix, 10 digits starting 6-9.
+function extractPhones(text) {
+  const out = [];
+  const re = /(?:\+?91[\s-]?|0)?([6-9]\d{4})[\s-]?(\d{5})(?!\d)/g;
+  let m;
+  while ((m = re.exec(text))) {
+    const p = '+91' + m[1] + m[2];
+    if (!out.includes(p)) out.push(p);
+  }
+  return out;
+}
+function extractEmails(text) {
+  const all = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || [];
+  return [...new Set(all.map(e => e.toLowerCase()))];
+}
+
+// ---------- credits ----------
+function creditsToday() {
+  return state.rows.filter(r => r.phone && r.revealed_at.startsWith(today())).length;
+}
+function capReached() { return creditsToday() >= (state.cap || 170); }
+
+// ---------- queue ----------
+function nextPendingIdx(from) {
+  const n = state.rows.length;
+  for (let k = 0; k < n; k++) {
+    const i = (from + k) % n;
+    if (state.rows[i].status === 'pending') return i;
+  }
+  return -1;
+}
+function current() {
+  const i = nextPendingIdx(state.idx || 0);
+  state.idx = i < 0 ? 0 : i;
+  return i < 0 ? null : state.rows[i];
+}
+
+let profileWin = null;
+function openCurrent() {
+  const r = current();
+  if (!r) return;
+  // Reuse one named tab so you're not drowning in tabs.
+  profileWin = window.open(r.url, 'revealQueueProfile');
+}
+
+function finish(status) {
+  const r = current();
+  if (!r) return;
+  const phone = document.getElementById('phone').value.trim();
+  const email = document.getElementById('email').value.trim();
+  if (status === 'auto') status = phone ? 'found' : email ? 'email_only' : 'no_data';
+  r.status = status;
+  r.phone = status === 'skipped' ? '' : phone;
+  r.email = status === 'skipped' ? '' : email;
+  r.revealed_at = status === 'skipped' ? '' : new Date().toISOString();
+  if (status === 'skipped') r.status = 'pending', state.idx = state.rows.indexOf(r) + 1;
+  for (const id of ['dump', 'phone', 'email']) document.getElementById(id).value = '';
+  save();
+  render();
+  if (current() && !capReached()) openCurrent();
+  document.getElementById('dump').focus();
+}
+
+// ---------- export ----------
+function csvCell(v) {
+  v = String(v ?? '');
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+}
+function exportCsv(onlyFound) {
+  const cols = [...state.columns, 'linkedin_url', 'phone', 'email', 'status', 'revealed_at', 'source'];
+  const lines = [cols.map(csvCell).join(',')];
+  for (const r of state.rows) {
+    if (onlyFound && !(r.phone || r.email)) continue;
+    const vals = state.columns.map(c => r.orig[c] || '');
+    vals.push(r.url, r.phone, r.email, r.status, r.revealed_at, r.revealed_at ? SOURCE : '');
+    lines.push(vals.map(csvCell).join(','));
+  }
+  const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `easyleadz-contacts-${today()}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ---------- render ----------
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function render() {
+  const rows = state.rows;
+  const used = creditsToday(), cap = state.cap || 170;
+  document.getElementById('stTotal').textContent = rows.length;
+  document.getElementById('stPending').textContent = rows.filter(r => r.status === 'pending').length;
+  document.getElementById('stFound').textContent = rows.filter(r => r.phone).length;
+  document.getElementById('stCredits').textContent = `${used} / ${cap}`;
+  document.getElementById('cap').value = cap;
+
+  const r = current();
+  const cur = document.getElementById('current');
+  if (!rows.length) cur.innerHTML = '<span class="muted">Load a list to start.</span>';
+  else if (!r) cur.innerHTML = '<span class="s-found">All done 🎉 — export below.</span>';
+  else {
+    const label = Object.values(r.orig).filter(v => v && !normalizeUrl(v)).slice(0, 3).join(' · ');
+    cur.innerHTML = `<div class="muted">#${rows.indexOf(r) + 1} of ${rows.length}</div>
+      <div>${esc(label)}</div><div class="url"><a href="${esc(r.url)}" target="revealQueueProfile">${esc(r.url)}</a></div>`;
+  }
+  const blocked = !r || capReached();
+  for (const id of ['openBtn', 'saveBtn', 'noDataBtn', 'skipBtn']) document.getElementById(id).disabled = !r;
+  document.getElementById('capMsg').innerHTML = r && capReached()
+    ? '<span class="cap-hit">Daily credit cap reached — stop revealing phones until tomorrow (emails are free).</span>'
+    : r ? 'Tip: keep this window and the LinkedIn tab side by side.' : '';
+
+  const done = rows.filter(x => x.revealed_at).sort((a, b) => b.revealed_at.localeCompare(a.revealed_at)).slice(0, 8);
+  document.getElementById('recent').innerHTML = done.map(x =>
+    `<tr><td>${esc(x.url.replace('https://www.linkedin.com/in/', '').replace(/\/$/, ''))}</td>
+     <td>${esc(x.phone)}</td><td>${esc(x.email)}</td><td class="s-${x.status}">${x.status.replace('_', ' ')}</td></tr>`).join('');
+}
+
+// ---------- wiring ----------
+const $ = id => document.getElementById(id);
+$('file').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const n = importText(await f.text());
+  $('importMsg').textContent = `Added ${n} new profile(s).`;
+  e.target.value = '';
+  render();
+});
+$('loadBtn').onclick = () => {
+  const n = importText($('paste').value);
+  $('importMsg').textContent = `Added ${n} new profile(s).`;
+  $('paste').value = '';
+  render();
+};
+$('clearBtn').onclick = () => {
+  if (!confirm('Delete the whole queue and all saved contacts from this browser? Export first if you need them.')) return;
+  state = { rows: [], columns: [], cap: state.cap, idx: 0 };
+  save(); render();
+};
+$('cap').onchange = e => { state.cap = parseInt(e.target.value, 10) || 170; save(); render(); };
+$('dump').addEventListener('input', e => {
+  const t = e.target.value;
+  const p = extractPhones(t), m = extractEmails(t);
+  if (p.length) $('phone').value = p.join(' / ');
+  if (m.length) $('email').value = m.join(' / ');
+});
+$('openBtn').onclick = openCurrent;
+$('saveBtn').onclick = () => finish('auto');
+$('noDataBtn').onclick = () => finish('no_data');
+$('skipBtn').onclick = () => finish('skipped');
+$('exportBtn').onclick = () => exportCsv(false);
+$('exportFoundBtn').onclick = () => exportCsv(true);
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); finish('auto'); }
+  else if (e.altKey && e.key.toLowerCase() === 'o') { e.preventDefault(); openCurrent(); }
+  else if (e.altKey && e.key.toLowerCase() === 'n') { e.preventDefault(); finish('no_data'); }
+  else if (e.altKey && e.key.toLowerCase() === 's') { e.preventDefault(); finish('skipped'); }
+});
+
+render();
+</script>
+</body>
+</html>
