@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 // Drives a Chrome started with --remote-debugging-port: opens each LinkedIn
-// profile from a CSV, clicks "View contact" in the EasyLeadz (Mr. E) side
-// panel, reads the phone/email and appends them to an output CSV.
+// profile, clicks "View contact" in the EasyLeadz (Mr. E) side panel, reads
+// the phone/email and writes them to a local CSV and (optionally) straight
+// into your Google Sheet.
 //
-//   node autopilot.mjs leads.csv [--out contacts.csv] [--max 170]
-//        [--min-delay 8] [--max-delay 20] [--port 9222]
+//   node autopilot.mjs leads.csv                       # CSV in, CSV out
+//   node autopilot.mjs --sheet <web app URL> --token T # Sheet in, Sheet + CSV out
+//   node autopilot.mjs leads.csv --sheet ... --token T # CSV in, Sheet + CSV out
+//
+//   [--out contacts.csv] [--max 170] [--per-minute 3] [--port 9222]
 //
 // Needs Node 22+ (built-in fetch and WebSocket). No npm install.
 
@@ -17,22 +21,24 @@ const opt = (name, def) => {
   const i = argv.indexOf('--' + name);
   return i >= 0 ? argv[i + 1] : def;
 };
-const input = argv.find(a => !a.startsWith('--') && !argv[argv.indexOf(a) - 1]?.startsWith('--'));
-if (!input) {
-  console.log('Usage: node autopilot.mjs leads.csv [--out contacts.csv] [--max 170] [--min-delay 8] [--max-delay 20] [--port 9222]');
+// Every flag takes a value, so the input file is the one arg that isn't a flag or a flag's value.
+const input = argv.find((a, i) => !a.startsWith('--') && !argv[i - 1]?.startsWith('--'));
+const SHEET = opt('sheet', null);
+const TOKEN = opt('token', '');
+if (!input && !SHEET) {
+  console.log('Usage: node autopilot.mjs [leads.csv] [--sheet <web app URL> --token <token>] [--out contacts.csv] [--max 170] [--per-minute 3] [--port 9222]');
   process.exit(1);
 }
-const OUT = opt('out', path.join(path.dirname(input), 'easyleadz-contacts.csv'));
+const OUT = opt('out', input ? path.join(path.dirname(input), 'easyleadz-contacts.csv') : 'easyleadz-contacts.csv');
+const PENDING = OUT + '.sheet-pending.jsonl';
 const MAX = parseInt(opt('max', '170'), 10);
-const MIN_DELAY = parseFloat(opt('min-delay', '8')) * 1000;
-const MAX_DELAY = parseFloat(opt('max-delay', '20')) * 1000;
+const INTERVAL = 60000 / parseFloat(opt('per-minute', '3'));
 const PORT = opt('port', '9222');
 const PANEL_TIMEOUT = 25000;
 const REVEAL_TIMEOUT = 15000;
 const SOURCE = 'EasyLeadz (Mr. E) side panel';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const jitter = () => MIN_DELAY + Math.random() * (MAX_DELAY - MIN_DELAY);
 const log = (...a) => console.log(new Date().toLocaleTimeString(), ...a);
 
 // ---------- parsing ----------
@@ -178,33 +184,92 @@ const remainingCredits = text => {
   return m ? parseInt(m[1], 10) : null;
 };
 
+// ---------- Google Sheet (via the Apps Script web app in sheet-webapp.gs) ----------
+async function sheetCall(init, query = '') {
+  let res;
+  try {
+    res = await fetch(SHEET + query, init);
+  } catch (e) {
+    throw new Error('cannot reach the sheet web app: ' + e.message);
+  }
+  const body = await res.text();
+  let j;
+  try { j = JSON.parse(body); } catch (e) {
+    throw new Error(`sheet web app didn't return JSON (HTTP ${res.status}) — is it deployed with access "Anyone"?`);
+  }
+  if (j.error) throw new Error('sheet: ' + j.error);
+  return j;
+}
+
+const sheetRead = async () => (await sheetCall({}, '?token=' + encodeURIComponent(TOKEN))).values;
+
+async function sheetWrite(rec) {
+  let last;
+  for (let i = 0; i < 3; i++) {
+    try {
+      await sheetCall({ method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ token: TOKEN, ...rec }) });
+      return true;
+    } catch (e) { last = e; await sleep(2000 * (i + 1)); }
+  }
+  // Keep it so the next run can retry; the local CSV already has it.
+  fs.appendFileSync(PENDING, JSON.stringify(rec) + '\n');
+  log(`   ! sheet write failed (${last.message}) — queued for next run`);
+  return false;
+}
+
+async function flushPending() {
+  if (!SHEET || !fs.existsSync(PENDING)) return;
+  const recs = fs.readFileSync(PENDING, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l));
+  fs.unlinkSync(PENDING);
+  log(`Retrying ${recs.length} sheet write(s) from last run…`);
+  for (const rec of recs) await sheetWrite(rec);
+}
+
 // ---------- main ----------
 async function main() {
-  const table = parseDelimited(fs.readFileSync(input, 'utf8').replace(/^﻿/, ''));
+  if (SHEET && !TOKEN) throw new Error('--sheet needs --token (the TOKEN you set in sheet-webapp.gs).');
+  const sheetValues = SHEET ? await sheetRead() : null;
+  const table = input ? parseDelimited(fs.readFileSync(input, 'utf8').replace(/^\ufeff/, '')) : sheetValues;
+  if (!table?.length) throw new Error('No rows found in ' + (input || 'the sheet'));
   const hasHeader = !table[0].some(v => normalizeUrl(v));
-  const header = hasHeader ? table[0].map(h => h.trim() || 'col') : table[0].map((_, i) => 'col' + (i + 1));
+  const fullHeader = hasHeader ? table[0].map(h => String(h).trim() || 'col') : table[0].map((_, i) => 'col' + (i + 1));
   const body = hasHeader ? table.slice(1) : table;
+  // Columns we write ourselves are left out of the carried-over input columns.
+  const OUR_COLS = new Set(['linkedin_url', 'phone', 'email', 'status', 'revealed_at', 'source']);
+  const keep = fullHeader.map((h, i) => i).filter(i => !OUR_COLS.has(fullHeader[i]));
+  const header = keep.map(i => fullHeader[i]);
 
   const leads = [], seen = new Set();
   for (const r of body) {
     const url = r.map(normalizeUrl).find(Boolean);
     if (!url || seen.has(url)) continue;
     seen.add(url);
-    leads.push({ url, row: header.map((_, i) => (r[i] || '').trim()) });
+    leads.push({ url, row: keep.map(i => String(r[i] ?? '').trim()) });
   }
 
-  // Resume: skip anything already in the output file.
+  // Resume: skip anything already in the output CSV, or already given a status in the sheet.
   const done = new Set();
   if (fs.existsSync(OUT)) {
-    for (const r of parseDelimited(fs.readFileSync(OUT, 'utf8').replace(/^﻿/, '')).slice(1)) {
+    for (const r of parseDelimited(fs.readFileSync(OUT, 'utf8').replace(/^\ufeff/, '')).slice(1)) {
       const u = r.map(normalizeUrl).find(Boolean);
       if (u) done.add(u);
     }
   } else {
-    fs.writeFileSync(OUT, '﻿' + [...header, 'linkedin_url', 'phone', 'email', 'status', 'revealed_at', 'source'].map(csvCell).join(',') + '\n');
+    fs.writeFileSync(OUT, '\ufeff' + [...header, 'linkedin_url', 'phone', 'email', 'status', 'revealed_at', 'source'].map(csvCell).join(',') + '\n');
+  }
+  if (sheetValues?.length) {
+    const statusCol = sheetValues[0].indexOf('status');
+    if (statusCol >= 0) {
+      for (const r of sheetValues.slice(1)) {
+        const u = r.map(normalizeUrl).find(Boolean);
+        if (u && String(r[statusCol]).trim()) done.add(u);
+      }
+    }
   }
   const todo = leads.filter(l => !done.has(l.url));
-  log(`${leads.length} profiles in list, ${done.size} already done, ${todo.length} to go. Max this run: ${MAX}. Writing to ${OUT}`);
+  log(`${leads.length} profiles in list, ${leads.length - todo.length} already done, ${todo.length} to go. ` +
+      `Max this run: ${MAX}, ~${(60000 / INTERVAL).toFixed(1)}/min. Writing to ${OUT}${SHEET ? ' + Google Sheet' : ''}`);
+  await flushPending();
 
   const probe = await panelText();
   probe?.cdp.close();
@@ -215,6 +280,7 @@ async function main() {
 
   let phonesThisRun = 0, lastText = '';
   for (const [n, lead] of todo.entries()) {
+    const started = Date.now();
     if (phonesThisRun >= MAX) { log(`Reached --max ${MAX}. Stopping.`); break; }
     log(`[${n + 1}/${todo.length}] ${lead.url}`);
     await tab.send('Page.navigate', { url: lead.url });
@@ -249,11 +315,15 @@ async function main() {
     const phones = extractPhones(text), emails = extractEmails(text);
     const status = phones.length ? 'found' : emails.length ? 'email_only' : 'no_data';
     if (phones.length) phonesThisRun++;
-    fs.appendFileSync(OUT, [...lead.row, lead.url, phones.join(' / '), emails.join(' / '), status,
-      new Date().toISOString(), SOURCE].map(csvCell).join(',') + '\n');
-    log(`   ${status}  ${phones.join(' / ')}  ${emails.join(' / ')}  (credits left: ${remainingCredits(text) ?? '?'})`);
+    const rec = { url: lead.url, phone: phones.join(' / '), email: emails.join(' / '), status,
+      revealed_at: new Date().toISOString(), source: SOURCE };
+    fs.appendFileSync(OUT, [...lead.row, rec.url, rec.phone, rec.email, rec.status, rec.revealed_at, rec.source]
+      .map(csvCell).join(',') + '\n');
+    const synced = SHEET ? await sheetWrite({ ...rec, fields: Object.fromEntries(header.map((h, i) => [h, lead.row[i]])) }) : false;
+    log(`   ${status}  ${rec.phone}  ${rec.email}  (credits left: ${remainingCredits(text) ?? '?'})${synced ? '  → sheet' : ''}`);
 
-    if (n < todo.length - 1) await sleep(jitter());
+    // Hold the pace at --per-minute, ±25% so it isn't metronomic.
+    if (n < todo.length - 1) await sleep(INTERVAL * (0.75 + Math.random() * 0.5) - (Date.now() - started));
   }
   tab.close();
   log(`Done. ${phonesThisRun} phone numbers this run → ${OUT}`);

@@ -2,7 +2,8 @@
 
 Fully automatic run over a list of LinkedIn profiles: opens each profile,
 clicks **View contact** in the EasyLeadz (Mr. E) side panel, reads the phone
-and email, appends them to a CSV, waits a random 8–20 s, moves on.
+and email and writes them to a local CSV **and** (optionally) straight into
+your Google Sheet. Paced at 3 profiles/minute by default.
 
 > Automating LinkedIn browsing and the EasyLeadz extension is against both
 > services' terms. Accounts can be restricted. Keep the delays, keep runs at or
@@ -21,30 +22,54 @@ macOS equivalent of step 3:
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir="$HOME/easyleadz-chrome"
 ```
 
+## Google Sheet setup (once, optional)
+1. Open your leads sheet → **Extensions → Apps Script**, delete what's there,
+   paste the contents of `sheet-webapp.gs`.
+2. Change `TOKEN` at the top to a long random string. Save.
+3. **Deploy → New deployment** → gear icon → **Web app**.
+   Execute as: **Me**. Who has access: **Anyone**. Deploy, allow access,
+   copy the **Web app URL** (ends in `/exec`).
+
+The token is what stops anyone else using that URL — keep both private.
+Results go into `phone / email / status / revealed_at / source` columns
+(created automatically) on the row with the matching LinkedIn URL.
+
 ## Each run
 1. Double-click `start-chrome.bat` (if that Chrome isn't already open).
 2. **Open the Mr. E side panel** in that window and leave it open.
-3. Export your Google Sheet as CSV (File → Download → CSV) — any column with
-   `linkedin.com/in/...` URLs is picked up automatically.
-4. In a terminal in this folder:
-   ```
-   node autopilot.mjs C:\path\to\leads.csv --max 170
-   ```
-5. Results are appended to `easyleadz-contacts.csv` next to your input file,
-   with your original columns + phone, email, status, time, source.
+3. In a terminal in this folder, pick one:
 
-Stop any time with **Ctrl+C**. Re-running the same command resumes — profiles
-already in the output file are skipped and cost nothing.
+   ```
+   # Leads from your Google Sheet, results written back into it (+ local CSV)
+   node autopilot.mjs --sheet https://script.google.com/macros/s/XXX/exec --token YOURTOKEN
+
+   # Leads from a CSV, results to the Google Sheet + local CSV
+   node autopilot.mjs leads.csv --sheet https://script.google.com/macros/s/XXX/exec --token YOURTOKEN
+
+   # CSV only
+   node autopilot.mjs leads.csv
+   ```
+
+Any column containing `linkedin.com/in/...` URLs is picked up automatically.
+The local copy is `easyleadz-contacts.csv` (next to the input CSV, or in the
+current folder when reading from the sheet).
+
+Stop any time with **Ctrl+C**. Re-running resumes: profiles already in the
+local CSV, or already given a status in the sheet, are skipped and cost nothing.
+If a sheet write fails (network blip) it's kept in
+`easyleadz-contacts.csv.sheet-pending.jsonl` and retried on the next run.
 
 ## Options
 | flag | default | meaning |
 |---|---|---|
-| `--out file.csv` | `easyleadz-contacts.csv` | output file |
+| `--sheet URL` / `--token T` | — | Google Sheet web app (see above) |
+| `--out file.csv` | `easyleadz-contacts.csv` | local CSV copy |
 | `--max N` | 170 | stop after N phone numbers this run |
-| `--min-delay S` / `--max-delay S` | 8 / 20 | random pause between profiles (seconds) |
+| `--per-minute N` | 3 | profiles per minute (each gap varies ±25%) |
 | `--port P` | 9222 | Chrome's remote-debugging port |
 
-It also stops when the panel shows 0 credits.
+It also stops when the panel shows 0 credits. At 3/min, 170 profiles take
+about an hour.
 
 ## Notes
 - The debugging port lets any program on your computer control that Chrome
